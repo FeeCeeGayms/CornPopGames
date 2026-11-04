@@ -1,0 +1,24 @@
+CornPop in the Pidser Cave - web version
+=========================================
+
+Two ways to play in a browser:
+
+1) Just open it
+   Open CornPop-v0.20.html (the single file) in Chrome, Edge, Firefox or Safari.
+   Everything is inside that one file, so it works offline, straight from your computer.
+   It's about 35 MB, so give it a few seconds to load.
+
+2) Put it on a website (this folder)
+   Upload everything in this folder to any static web host: itch.io (upload the zip as an
+   "HTML" game), GitHub Pages, Netlify, your own server, and so on. index.html is the start page.
+   Browsers block games like this when index.html is opened straight from disk, so to test
+   this folder on your own computer, run a small local server in it, for example:
+       python -m http.server 8000      then open http://localhost:8000
+
+Asset formats (web friendly):
+   music and sound   Opus in WebM (.webm), with AAC (.mp4) for browsers without Opus (older Safari)
+   textures          WebP (lossless)
+   3D models         glTF binary, quantised, with WebP textures, gzipped (.glb.gz)
+
+Controls: WASD move, mouse look (click to capture), left click fire, 1-9 / Q / wheel weapons,
+Space jump, C crouch, E use, V third person, Esc pause. Touch controls and game pads work too.
