@@ -108,6 +108,13 @@ export class HUD {
       if (lines.length > 3) { g.fillStyle = 'rgba(12,8,5,0.78)'; g.fillRect(cx - Math.round(bw / 2), top - 10, bw, lines.length * 10 + 16); g.strokeStyle = '#6a4428'; g.strokeRect(cx - Math.round(bw / 2) + 0.5, top - 9.5, bw - 1, lines.length * 10 + 15); }
       lines.forEach((ln, i) => drawText(g, ln, Math.round(cx - textWidth(ln) / 2), top + i * 10, '#ffe0a0'));
     }
+    if (st.boss) { // BCM's health bar
+      const bw = Math.min(200, W - 60), bx = Math.round(W / 2 - bw / 2), by = 50; // below the notify lines
+      drawText(g, 'BCM', Math.round(W / 2 - textWidth('BCM') / 2), by - 10, '#80e070');
+      g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(bx - 2, by - 2, bw + 4, 9); g.fillStyle = '#3a1008'; g.fillRect(bx, by, bw, 5);
+      g.fillStyle = st.boss > 0.45 ? '#d83a18' : '#ff7a20'; g.fillRect(bx, by, Math.round(bw * st.boss), 5); g.fillStyle = 'rgba(255,220,160,0.5)'; g.fillRect(bx, by, Math.round(bw * st.boss), 1);
+      g.strokeStyle = '#6a4428'; g.strokeRect(bx - 1.5, by - 1.5, bw + 3, 8);
+    }
     if (st.crosshair) { g.fillStyle = 'rgba(255,230,180,0.75)'; g.fillRect(W / 2 | 0, H / 2 - 2 | 0, 1, 5); g.fillRect(W / 2 - 2 | 0, H / 2 | 0, 5, 1); }
     if (st.visible === false) { this.tex.needsUpdate = true; this.face.visible = false; return; }
     this.face.visible = true;

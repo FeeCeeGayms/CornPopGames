@@ -82,8 +82,13 @@ export class Sfx {
     const s = this.ctx.createBufferSource(); s.buffer = this.noiseBuf; s.loop = dur > 0.9; const f = this.ctx.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + dur); f.Q.value = q;
     const g = this.ctx.createGain(); this.env(g, t, 0.01, peak, dur); s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.1);
   }
-  play(name) {
+  play(name, vol = 1) { // vol < 1: route this one sound through a quieter bus (distance falloff for BCM)
     if (!this.ctx) return;
+    if (vol === 1) return this.play1(name);
+    const m = this.master, g = this.ctx.createGain(); g.gain.value = Math.max(0, vol); g.connect(m); this.master = g;
+    try { this.play1(name); } finally { this.master = m; }
+  }
+  play1(name) {
     if (this.buf) { // recorded weapon sounds
       if (name === 'shotgun' && this.buf.shotgun) { this.sample('shotgun', 0.85, 0.97 + Math.random() * 0.06); return; }
       if (name === 'turdLaunch' && this.buf.fart) { this.sample('fart', 1, 0.9 + Math.random() * 0.2); return; }
@@ -158,6 +163,20 @@ export class Sfx {
       case 'colaHiss': this.noise(0.5, 5000, 0.8, 0.06, 0, 'highpass', 7000); break;
       case 'colaBoom': this.noise(0.12, 2500, 1, 0.5, 0, 'highpass'); this.noise(1.0, 700, 1, 0.6, 0, 'lowpass', 80); this.tone('sine', 90, 30, 0.7, 0.45); this.noise(1.4, 6000, 0.7, 0.18, 0.08, 'highpass', 2500); [0.15, 0.27, 0.36, 0.5].forEach(a => this.tone('sine', 900 + Math.random() * 900, 1800, 0.05, 0.05, a)); break;
       case 'railFire': this.tone('sawtooth', 1800, 90, 0.45, 0.22); this.tone('sine', 300, 1200, 0.25, 0.12, 0.02); this.noise(0.5, 3000, 2, 0.25, 0, 'bandpass', 400); this.tone('triangle', 220, 440, 0.35, 0.1, 0.25); this.tone('triangle', 440, 220, 0.35, 0.08, 0.5); break;
+      // Trop: a trumpet (sawtooth through a brassy band-pass with a little vibrato) and pork chops
+      case 'tropToot': [[0, 233, 0.16], [0.17, 311, 0.32]].forEach(([t, f, d]) => { this.tone('sawtooth', f * 0.98, f, d, 0.2, t); this.tone('square', f * 2, f * 2.01, d, 0.05, t); }); this.noise(0.08, 1800, 2, 0.06, 0, 'bandpass', 900); break;
+      case 'tropSight': [[0, 349, 0.12], [0.13, 349, 0.12], [0.26, 349, 0.12], [0.39, 466, 0.5]].forEach(([t, f, d]) => { this.tone('sawtooth', f, f, d, 0.2, t); this.tone('square', f * 2, f * 2, d, 0.05, t); }); break;
+      case 'tropPain': this.tone('sawtooth', 620, 380, 0.18, 0.18); this.tone('square', 900, 500, 0.12, 0.05); break;
+      case 'tropDeath': [[0, 294, 0.3], [0.32, 277, 0.3], [0.64, 262, 0.3], [0.96, 247, 1.1]].forEach(([t, f, d], i) => { this.tone('sawtooth', f, i === 3 ? f * 0.94 : f, d, 0.2, t); this.tone('sine', f / 2, f / 2, d, 0.1, t); }); break; // the sad trombone, on a trumpet
+      case 'tropJump': this.tone('sawtooth', 300, 520, 0.1, 0.1); break;
+      case 'chopHit': this.noise(0.12, 900, 1.5, 0.35, 0, 'lowpass', 300); this.tone('sine', 160, 90, 0.1, 0.25); break;
+      // BCM the boss: a deep froggy roar, heavy steps, meatball rockets
+      case 'bcmSight': this.tone('sawtooth', 70, 45, 1.3, 0.32); this.tone('square', 52, 38, 1.2, 0.18, 0.05); this.noise(1.2, 380, 3, 0.3, 0, 'bandpass', 160); this.tone('sawtooth', 140, 90, 0.5, 0.12, 0.6); [0, 0.14, 0.3].forEach(t => this.tone('sine', 95, 60, 0.18, 0.2, 0.9 + t)); break;
+      case 'bcmPain': this.tone('sawtooth', 120, 70, 0.4, 0.28); this.noise(0.3, 500, 2, 0.2, 0, 'bandpass', 200); this.tone('sine', 80, 50, 0.3, 0.2, 0.05); break;
+      case 'bcmDeath': this.tone('sawtooth', 110, 30, 2.2, 0.32); this.tone('square', 60, 28, 2.0, 0.16, 0.1); this.noise(2.0, 300, 2, 0.28, 0, 'lowpass', 80); [0.4, 0.7, 1.0].forEach(t => this.tone('sine', 150, 70, 0.2, 0.15, t)); break;
+      case 'bcmStep': this.tone('sine', 55, 28, 0.35, 0.5); this.noise(0.3, 220, 1, 0.4, 0, 'lowpass', 70); this.noise(0.12, 1200, 2, 0.08, 0.02, 'bandpass'); break;
+      case 'meatLaunch': this.noise(0.5, 260, 0.8, 0.45, 0, 'lowpass', 1200); this.tone('sine', 110, 50, 0.35, 0.35); this.noise(0.6, 2200, 1.5, 0.16, 0.05, 'bandpass', 600); this.tone('sawtooth', 200, 90, 0.2, 0.08); break;
+      case 'meatBoom': this.noise(0.9, 700, 1, 0.55, 0, 'lowpass', 90); this.tone('sine', 85, 30, 0.6, 0.45); this.noise(0.35, 900, 4, 0.3, 0.02, 'bandpass', 250); this.noise(0.25, 2400, 2, 0.15, 0.08, 'bandpass', 800); break;
       case 'railHit': this.noise(0.2, 900, 2, 0.3, 0, 'lowpass', 200); this.tone('sine', 300, 80, 0.2, 0.15); break;
       case 'jellyShot': this.tone('sine', 380 + Math.random() * 80, 900, 0.07, 0.16); this.tone('square', 160, 320, 0.05, 0.05); this.noise(0.05, 1500, 3, 0.08, 0, 'bandpass', 3000); break;
       case 'jellyHit': this.tone('sine', 520 + Math.random() * 120, 140, 0.16, 0.18); this.noise(0.12, 800, 4, 0.15, 0, 'bandpass', 300); break;

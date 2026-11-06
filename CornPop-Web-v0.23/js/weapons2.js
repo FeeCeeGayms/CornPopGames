@@ -41,7 +41,7 @@ function glowTex() {
 }
 function glowSprite(color, size, opacity = 1) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex(), color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity })); s.scale.set(size, size, 1); return s; }
 const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
-const eBox = e => [[e.pos[0] - 18, e.pos[1] - 26, e.pos[2] - 18], [e.pos[0] + 18, e.pos[1] + e.K.height - 22, e.pos[2] + 18]];
+const eBox = e => { const w = e.K.hw || 18; return [[e.pos[0] - w, e.pos[1] - 26, e.pos[2] - w], [e.pos[0] + w, e.pos[1] + e.K.height - 22, e.pos[2] + w]]; };
 class Helix extends THREE.Curve { // a noodle wound round a straight line
   constructor(a, b, r, turns, phase = 0) { super(); this.a = a; this.b = b; this.r = r; this.turns = turns; this.phase = phase; const d = b.clone().sub(a).normalize(); this.u = new THREE.Vector3(0, 1, 0).cross(d); if (this.u.lengthSq() < 1e-4) this.u.set(1, 0, 0); this.u.normalize(); this.v = d.clone().cross(this.u).normalize(); }
   getPoint(t, out = new THREE.Vector3()) { const ang = this.phase + t * this.turns * Math.PI * 2, r = this.r * Math.min(1, t * 30); return out.copy(this.a).lerp(this.b, t).addScaledVector(this.u, Math.cos(ang) * r).addScaledVector(this.v, Math.sin(ang) * r); }
@@ -399,7 +399,7 @@ export class Arsenal {
   blast(p, R, dmg, knock, selfScale, onEnemy, minK = 0.25) {
     const g = this.game;
     for (const e of g.enemies) {
-      if (!e.alive || e.dormant) continue; const c = [e.pos[0], e.pos[1] + 10, e.pos[2]], d = Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]);
+      if (!e.alive || e.dormant) continue; const c = e.boss ? e.nearest(p) : [e.pos[0], e.pos[1] + 10, e.pos[2]], d = Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]);
       if (d > R + 20 || g.world.rayFrac(p, c) < 0.98) continue;
       const k = Math.max(minK, 1 - d / (R + 20)); e.hurt(dmg * k, false); onEnemy && onEnemy(e, k);
       if (e.alive && !e.turret && knock) { const l = d || 1, kb = knock * k; e.phys.vel[0] += (c[0] - p[0]) / l * kb; e.phys.vel[2] += (c[2] - p[2]) / l * kb; if (e.flyVel) { e.flyVel[0] += (c[0] - p[0]) / l * kb; e.flyVel[2] += (c[2] - p[2]) / l * kb; } else e.phys.vel[1] += 140 * k; }

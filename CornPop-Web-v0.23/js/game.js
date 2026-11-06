@@ -9,6 +9,8 @@ import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { LEVELS, EPISODES, episodeOf } from './levels.js';
 import { Arsenal, W2, W2_KEYS, makeW2Pickup } from './weapons2.js';
+import { BCM_ANIMS, BossDirector } from './boss.js';
+import { TROP_ANIMS, TropDirector } from './trop.js';
 import { Qoq, QOQ, QOQ_ANIMS, MARV, MARV_ANIMS, BALLINKI, BALLINKI_ANIMS, FRENTA, FRENTA_ANIMS, BEANS, BEANS_ANIMS, makePotato, TURD, SOAKER, SHOTGUN, CANDYGUN, Soaker, Shotgun, CandyGun, TurdLauncher, makeTurd, Particles, makeChicken, makeTissue, makeSausage, makeCandyCorn, makePickupModel, segAabb, LIT } from './combat.js';
 
 THREE.ColorManagement.enabled = false;
@@ -230,6 +232,10 @@ export class Game {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene = new THREE.Scene();
+    this.canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); this.ctxLost = true; console.warn('WebGL context lost'); });
+    this.canvas.addEventListener('webglcontextrestored', () => { // the phone dropped the graphics context: rebuild the map from its start instead of showing a black screen
+      this.ctxLost = false; this.resize(); if ((this.state === 'play' || this.state === 'paused') && this.onRestart) this.onRestart(this.levelIndex);
+    });
     { // soft studio environment for the lit materials (weapons, pickups, props): bright top, dim floor, a couple of light panels for highlights
       const pm = new THREE.PMREMGenerator(this.renderer), es = new THREE.Scene();
       const geo = new THREE.SphereGeometry(10, 32, 16), pos = geo.attributes.position, col = [];
@@ -262,6 +268,20 @@ export class Game {
     window.__back = () => { if (this.state === 'play') this.pause(true); else if (this.state === 'paused') this.pause(false); return true; };
   }
 
+  freeGPU(root, textures = false) {
+    root.traverse(n => {
+      if (n.geometry && !n.isSprite) n.geometry.dispose();
+      for (const m of [].concat(n.material || [])) { if (!m || !m.dispose) continue;
+        if (textures) for (const v of Object.values(m)) if (v && v.isTexture && !v.isRenderTargetTexture && (v.isDataTexture || v.isCanvasTexture) && v !== this._glowTex) v.dispose();
+        m.dispose(); }
+    });
+  }
+  // one failing system must not freeze the rest of the game (or stop the frame from drawing): log it once and carry on
+  safe(tag, f) { try { f(); } catch (e) { this.reportError(tag, e); } }
+  reportError(tag, e) {
+    const k = tag + ':' + (e && e.message); this._errs = this._errs || new Set(); if (this._errs.has(k)) return; this._errs.add(k);
+    console.error('[' + tag + ']', e); try { this.hud && this.hud.print(('ERROR ' + tag + ': ' + (e && e.message || e)).slice(0, 70)); } catch (_) { }
+  }
   applyOpts() {
     const o = this.opts; this.input.sens = o.sens; this.input.touchSens = o.touchSens; this.input.invert = o.invert;
     this.sfx.music = o.music; this.sfx.songVol = o.songVol ?? 0.7; this.sfx.setVolume(o.vol); this.blitMat.uniforms.gamma.value = o.gamma; this.blitMat.uniforms.levels.value = o.retro && this.gfx().retro ? 40 : 0; this.applyTexQuality();
@@ -325,6 +345,8 @@ export class Game {
     { const c = this.beansAsset.clips, sub = (src, name, a, b) => { c[name] = THREE.AnimationUtils.subclip(c[src], name, a, b, 30); }; // Beans ships with walk/run only
       sub('Walking', 'B_idle', 0, 2); sub('Running', 'B_attack', 0, 20); sub('Walking', 'B_pain', 6, 16); }
     this.beansAsset.animMap = BEANS_ANIMS;
+    try { this.bcmAsset = await new CornPopAsset().load('assets/models/bcm.glb', p => onProgress(0.99, 'Loading BCM')); this.bcmAsset.animMap = BCM_ANIMS; } catch (e) { console.warn('BCM model missing', e); this.bcmAsset = null; }
+    try { this.tropAsset = await new CornPopAsset().load('assets/models/trop.glb', p => onProgress(0.995, 'Loading Trop')); this.tropAsset.animMap = TROP_ANIMS; } catch (e) { console.warn('Trop model missing', e); this.tropAsset = null; }
     this.soaker = new Soaker(this); this.shotgun = new Shotgun(this); this.candygun = new CandyGun(this); this.turdgun = new TurdLauncher(this); this.arsenal = new Arsenal(this); this.aim = new THREE.Object3D();
     for (const w of Object.values(this.arsenal.guns)) try { this.renderer.compile(w.scene, w.cam); } catch (e) { } // no shader hitch on the first switch
     this.carry = this.freshCarry(0);
@@ -384,7 +406,12 @@ export class Game {
     this.state = 'loading'; this.levelIndex = i;
     const def = LEVELS[i]; this.level = def; this.matCache.clear();
     this.scrollTex = def.scroll || {};
+    if (this.world) { this.world.lmTex && this.world.lmTex.dispose(); this.world.smTex && this.world.smTex.dispose(); }
+    // give the old map's GPU buffers, shaders and generated textures back (three re-uploads anything shared when it's next drawn).
+    // Before v0.22 nothing was freed, so every map left its geometry behind and phones ran out of graphics memory after a few maps.
+    for (const o of this.scene.children) this.freeGPU(o, true);
     while (this.scene.children.length) this.scene.remove(this.scene.children[0]);
+    if (this.director) { this.director.clear(); this.director = null; }
     const W = new World(def, this.T); this.world = W;
     W.parseGrid(); W.genGridFaces(); W.genGridBrushes(); W.genDoors();
     const props = new PropBuilder(W);
@@ -456,6 +483,9 @@ export class Game {
     this.flashlight.shadow.mapSize.height = this.gfx().shadow;
     this.scene.add(this.flashlight);
     this.scene.add(this.flashlight.target);
+    this.director = new BossDirector(this); // BCM, the boss who now and then turns up in a big room
+    this.trops = new TropDirector(this);    // Trop, sent in when CornPop is having it too easy
+    this.lastHurtT = -1e9;
     this.lockMsgT = 0; this.flash = null; this.intermission = null;
     this.sfx.startAmbient(def.ambience || 'cave');
     this.sfx.playSong(def.music || null);
@@ -587,6 +617,7 @@ export class Game {
     if (w.def.next) { const nw = this.waves.get(w.def.next); if (nw) { nw.pendingAt = this.time + (w.def.nextDelay ?? 2.5); } }
   }
   updateWaves() {
+    if (this.director && this.director.active) return; // nothing else spawns while BCM is around
     for (const w of this.waves.values()) {
       if (w.queue && w.queue.length) { w.queue = w.queue.filter(({ q, at }) => { if (this.time < at) return true; if (q.dormant) { q.activate(); this.teleportFx(q.pos); this.sfx.play('spawn'); } return false; }); }
       if (w.state === 'idle' && w.def.onKey && this.keys.has(w.def.onKey)) this.startWave(w);
@@ -602,7 +633,7 @@ export class Game {
   updatePlats(dt) {
     for (const m of this.world.movers) {
       if (m.type !== 'plat') continue;
-      const ride = this.riders(m, 0); const occupied = ride.includes(this.player.pos); // only the player calls a lift
+      const ride = this.riders(m, 0); const occupied = ride.includes(this.player.pos) || this.enemies.some(q => q.kind === 'trop' && q.alive && ride.includes(q.pos)); // the player (and Trop, who follows him) call lifts
       if (m.state === 'closed' && occupied) { m.t = (m.t || 0) + dt; if (m.t > 0.35) { m.state = 'opening'; m.t = 0; this.sfx.play('lift'); } } else if (m.state === 'closed') m.t = 0;
       let off = m.offset;
       if (m.state === 'opening') { off = Math.min(m.travel, off + m.speed * dt); if (off >= m.travel) { m.state = 'open'; m.t = 0; this.sfx.play('doorstop'); } }
@@ -672,7 +703,7 @@ export class Game {
       d.age += dt; d.vel[1] -= SOAKER.gravity * dt;
       const p1 = [d.p[0] + d.vel[0] * dt, d.p[1] + d.vel[1] * dt, d.p[2] + d.vel[2] * dt];
       let best = 2, hitE = null;
-      for (const e of this.enemies) { if (!e.alive) continue; const t = segAabb(d.p, p1, [e.pos[0] - 18, e.pos[1] - 26, e.pos[2] - 18], [e.pos[0] + 18, e.pos[1] + e.K.height - 22, e.pos[2] + 18]); if (t >= 0 && t < best) { best = t; hitE = e; } }
+      for (const e of this.enemies) { if (!e.alive) continue; const t = segAabb(d.p, p1, [e.pos[0] - (e.K.hw || 18), e.pos[1] - 26, e.pos[2] - (e.K.hw || 18)], [e.pos[0] + (e.K.hw || 18), e.pos[1] + e.K.height - 22, e.pos[2] + (e.K.hw || 18)]); if (t >= 0 && t < best) { best = t; hitE = e; } }
       const tr = this.world.trace(d.p, p1, [-1, -1, -1], [1, 1, 1], null, true);
       if (hitE && best <= tr.fraction) {
         const hp = [d.p[0] + (p1[0] - d.p[0]) * best, d.p[1] + (p1[1] - d.p[1]) * best, d.p[2] + (p1[2] - d.p[2]) * best];
@@ -987,7 +1018,7 @@ export class Game {
     for (let i = 0; i < 46; i++) this.particles.spawn(p, [(Math.random() - 0.5) * 420, Math.random() * 300, (Math.random() - 0.5) * 420], Math.random() < 0.6 ? [0.42, 0.24, 0.1] : [0.6, 0.38, 0.16], 0.6 + Math.random() * 0.6, 600);
     for (let i = 0; i < 14; i++) this.particles.spawn(p, [(Math.random() - 0.5) * 80, 20 + Math.random() * 60, (Math.random() - 0.5) * 80], [0.5, 0.42, 0.2], 1.4, -20, 2);
     for (const e of this.enemies) {
-      if (!e.alive || e.dormant) continue; const c = [e.pos[0], e.pos[1] + 10, e.pos[2]], d = Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]);
+      if (!e.alive || e.dormant) continue; const c = e.boss ? e.nearest(p) : [e.pos[0], e.pos[1] + 10, e.pos[2]], d = Math.hypot(c[0] - p[0], c[1] - p[1], c[2] - p[2]);
       if (d > R + 20 || this.world.rayFrac(p, c) < 0.98) continue;
       const k = Math.max(0.25, 1 - d / (R + 20)); e.pooT = TURD.gooTime; e.hurt(TURD.damage * k, false);
       if (e.alive && !e.turret) { const l = d || 1, kb = TURD.knock * k; e.phys.vel[0] += (c[0] - p[0]) / l * kb; e.phys.vel[2] += (c[2] - p[2]) / l * kb; if (e.flyVel) { e.flyVel[0] += (c[0] - p[0]) / l * kb; e.flyVel[2] += (c[2] - p[2]) / l * kb; } else e.phys.vel[1] += 140 * k; }
@@ -1003,7 +1034,7 @@ export class Game {
       s.t += dt; s.v[1] -= TURD.gravity * dt;
       const p1 = [s.p[0] + s.v[0] * dt, s.p[1] + s.v[1] * dt, s.p[2] + s.v[2] * dt];
       let hit = false;
-      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; if (segAabb(s.p, p1, [e.pos[0] - 18, e.pos[1] - 26, e.pos[2] - 18], [e.pos[0] + 18, e.pos[1] + e.K.height - 22, e.pos[2] + 18]) >= 0) { hit = true; break; } }
+      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; if (segAabb(s.p, p1, [e.pos[0] - (e.K.hw || 18), e.pos[1] - 26, e.pos[2] - (e.K.hw || 18)], [e.pos[0] + (e.K.hw || 18), e.pos[1] + e.K.height - 22, e.pos[2] + (e.K.hw || 18)]) >= 0) { hit = true; break; } }
       const tr = this.world.trace(s.p, p1, [-2, -2, -2], [2, 2, 2], null, true);
       if (hit || tr.fraction < 1 || s.t > 4) { this.scene.remove(s.mesh); this.turdBoom(hit ? p1 : tr.fraction < 1 ? tr.end : p1); continue; }
       s.p = p1; s.mesh.position.set(...p1); s.mesh.rotation.x += dt * 9; s.mesh.rotation.z += dt * 5;
@@ -1025,7 +1056,7 @@ export class Game {
       s.t += dt; s.v[1] -= CANDYGUN.gravity * dt;
       const p1 = [s.p[0] + s.v[0] * dt, s.p[1] + s.v[1] * dt, s.p[2] + s.v[2] * dt];
       let best = 2, hitE = null;
-      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; const t = segAabb(s.p, p1, [e.pos[0] - 17, e.pos[1] - 26, e.pos[2] - 17], [e.pos[0] + 17, e.pos[1] + e.K.height - 22, e.pos[2] + 17]); if (t >= 0 && t < best) { best = t; hitE = e; } }
+      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; const t = segAabb(s.p, p1, [e.pos[0] - (e.K.hw || 17), e.pos[1] - 26, e.pos[2] - (e.K.hw || 17)], [e.pos[0] + (e.K.hw || 17), e.pos[1] + e.K.height - 22, e.pos[2] + (e.K.hw || 17)]); if (t >= 0 && t < best) { best = t; hitE = e; } }
       const tr = this.world.trace(s.p, p1, [-1, -1, -1], [1, 1, 1], null, true);
       let gone = false;
       if (hitE && best <= tr.fraction) {
@@ -1062,7 +1093,7 @@ export class Game {
       s.t += dt; s.v[1] -= SHOTGUN.gravity * dt;
       const p1 = [s.p[0] + s.v[0] * dt, s.p[1] + s.v[1] * dt, s.p[2] + s.v[2] * dt];
       let best = 2, hitE = null;
-      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; const top = e.K.height - 22; const t = segAabb(s.p, p1, [e.pos[0] - 18, e.pos[1] - 26, e.pos[2] - 18], [e.pos[0] + 18, e.pos[1] + top, e.pos[2] + 18]); if (t >= 0 && t < best) { best = t; hitE = e; } }
+      for (const e of this.enemies) { if (!e.alive || e.dormant) continue; const top = e.K.height - 22; const t = segAabb(s.p, p1, [e.pos[0] - (e.K.hw || 18), e.pos[1] - 26, e.pos[2] - (e.K.hw || 18)], [e.pos[0] + (e.K.hw || 18), e.pos[1] + top, e.pos[2] + (e.K.hw || 18)]); if (t >= 0 && t < best) { best = t; hitE = e; } }
       const tr = this.world.trace(s.p, p1, [-1, -1, -1], [1, 1, 1], null, true);
       let gone = false;
       if (hitE && best <= tr.fraction) {
@@ -1090,9 +1121,18 @@ export class Game {
   damagePlayer(n, burn) {
     if (this.playerDead) return;
     this.input.rumble(0.35, Math.min(1, n / 12), 140);
+    this.lastHurtT = this.time;
     this.health -= n; this.flash = burn ? { rgb: [0.9, 0.35, 0.05], a: 0.28 } : { rgb: [0.9, 0.1, 0.05], a: 0.32 }; this.sfx.play('pain'); this.player.landKick = Math.min(10, this.player.landKick + 4);
     this.portrait.hurt = 1; if (Math.random() < 0.3) this.emote('angry');
     if (this.health <= 0) this.killPlayer();
+  }
+  bossDefeated(b) {
+    this.hud.centerPrint('BCM IS DONE FOR!', 3); this.sfx.play('secret'); this.bonusFlash([0.9, 0.55, 0.2], 0.4); this.emote('happy');
+    const p = b.p, A = b.arena, f = this.world.floorAt(p[0], p[2]);
+    this.dropPickup('health', [p[0] - 30, f, p[2]], 25); this.dropPickup('health', [p[0] + 30, f, p[2]], 25);
+    const own = this.arsenal.owned(); for (let i = 0; i < 2 && own.length; i++) { const k = own[(Math.random() * own.length) | 0]; this.dropPickup(W2[k].ammoItem, [p[0] + (i ? 20 : -20), f, p[2] + 40], W2[k].box); }
+    if (this.hasTurd) this.dropPickup('turdbox', [p[0], f, p[2] - 40], 4); else if (this.hasShotgun) this.dropPickup('sausages', [p[0], f, p[2] - 40], 12);
+    if (this.director) this.director.cool = 60;
   }
   killPlayer() {
     this.health = 0; this.playerDead = true; this.deathT = 0; this.sfx.play('die'); this.sfx.spray(false); this.sfx.spin(0); this.sfx.sauce(false);
@@ -1334,9 +1374,10 @@ export class Game {
     if (!this.world || this.state === 'loading') { this.renderer.setClearColor(0x000000); this.renderer.clear(); return; }
     this.shared.time.value += dt;
     this.perf(dt);
-    if (this.state === 'play') this.tick(dt);
-    else if (this.state === 'intermission') this.tickIntermission(dt);
-    this.render(dt);
+    if (this.ctxLost) return;
+    if (this.state === 'play') this.safe('tick', () => this.tick(dt));
+    else if (this.state === 'intermission') this.safe('intermission', () => this.tickIntermission(dt));
+    this.safe('render', () => this.render(dt));
   }
 
   // dynamic resolution (like modern console engines): drop the render scale a little when frames run long, raise it back when there is headroom
@@ -1367,11 +1408,11 @@ export class Game {
     if (pl.pos[1] < -1500) { const st = this.ents.find(e => e.type === 'start'); pl.spawn(st.pos, st.angle || 0); this.message('Whoa! Back to the start.'); }
     // breadcrumb trail so Qoqs can follow you around corners and through doors
     const last = this.trail[this.trail.length - 1];
-    if (pl.onground && (!last || Math.hypot(pl.pos[0] - last[0], pl.pos[1] - last[1], pl.pos[2] - last[2]) > 56)) { this.trail.push(pl.pos.slice()); if (this.trail.length > 80) { this.trail.shift(); for (const e of this.enemies) e.trailIdx--; } }
+    if (pl.onground && (!last || Math.hypot(pl.pos[0] - last[0], pl.pos[1] - last[1], pl.pos[2] - last[2]) > 56)) { this.trail.push(pl.pos.slice()); if (this.trail.length > 200) { this.trail.shift(); for (const e of this.enemies) e.trailIdx--; } }
     for (let a = 0; a < 3; a++) { this.playerBrush.min[a] = pl.pos[a] + HULL_MIN[a]; this.playerBrush.max[a] = pl.pos[a] + pl.hmax[a]; }
-    this.updateDoors(dt); this.updatePlats(dt); this.updateEnts(dt, cmd); this.updateWaves(); this.updateStyles(); this.updateRain(dt);
-    this.slideOffHeads();
-    this.updateCombat(dt, cmd); this.updateEmitters(dt); this.sfx.updateAmbient(this.player.pos);
+    this.safe('doors', () => this.updateDoors(dt)); this.safe('plats', () => this.updatePlats(dt)); this.safe('items', () => this.updateEnts(dt, cmd)); this.safe('boss', () => this.director && this.director.update(dt)); this.safe('trop', () => this.trops && this.trops.update(dt)); this.safe('waves', () => this.updateWaves()); this.updateStyles(); this.safe('rain', () => this.updateRain(dt));
+    this.safe('heads', () => this.slideOffHeads());
+    this.safe('combat', () => this.updateCombat(dt, cmd)); this.safe('emitters', () => this.updateEmitters(dt)); this.sfx.updateAmbient(this.player.pos);
     this.input.consume('KeyE');
     this.hud.update(dt);
     // portrait looks where you turn/strafe, like the Quake/Doom face
@@ -1405,7 +1446,7 @@ export class Game {
     else if (this.weapon === 'shotgun' && this.hasShotgun) { this.shotgun.update(dt, cmd.fire, this.aim, pl); this.sfx.spray(false); this.sfx.spin(0); }
     else if (this.hasSoaker) { this.soaker.update(dt, cmd.fire, this.aim, pl); this.sfx.spin(0); if (cmd.fire && this.ammo <= 0) this.autoSwitch(); }
     this.updateGoo(dt);
-    for (const e of this.enemies) e.update(dt);
+    for (const e of this.enemies) this.safe('enemy ' + (e.kind || ''), () => e.update(dt));
     this.updateTissues(dt); this.updateSausages(dt); this.updateCandy(dt); this.updateFarts(dt); this.updateTurds(dt); this.updateFireballs(dt); this.updatePotatoes(dt); this.updateDebris(dt); this.arsenal.updateWorld(dt);
     this.updateChickens(dt); this.updateDroplets(dt); this.particles.update(dt); this.updatePuddles(dt);
     this.portrait.hurt = Math.max(0, (this.portrait.hurt || 0) - dt * 2.5);
@@ -1415,7 +1456,7 @@ export class Game {
     this.deathT += dt; this.time -= dt;
     this.player.update(dt, { forward: 0, side: 0, jump: false, walk: false });
     this.updatePlats(dt); this.updateStyles(); this.updateRain(dt); this.hud.update(dt);
-    for (const e of this.enemies) e.update(dt);
+    for (const e of this.enemies) this.safe('enemy ' + (e.kind || ''), () => e.update(dt));
     this.updateTissues(dt); this.updateSausages(dt); this.updateCandy(dt); this.updateFarts(dt); this.updateTurds(dt); this.updateFireballs(dt); this.updatePotatoes(dt); this.updateDebris(dt); this.arsenal.updateWorld(dt); this.updateGoo(dt); this.sfx.spin(0);
     this.updateChickens(dt); this.updateDroplets(dt); this.particles.update(dt); this.updatePuddles(dt);
     this.portrait.update(dt, 0, 0.3); this.portrait.scene.background.setRGB(0.5, 0.05, 0.03);
@@ -1485,7 +1526,7 @@ export class Game {
         U.time.value = this.shared.time.value; U.rainAmt.value = this.rain ? 1 : 0.15; } }
     const fl = this.flash; this.blitMat.uniforms.flash.value.set(...(fl ? fl.rgb : [0, 0, 0]), fl ? Math.max(0, fl.a) : 0);
     R.render(this.blitScene, this.blitCam);
-    this.hud.set({ health: this.health, owned: this.arsenal.owned(), ammo: W2[this.weapon] ? this.arsenal.ammo(this.weapon) : this.weapon === 'turd' ? this.turds : this.weapon === 'candygun' ? this.candy : this.weapon === 'shotgun' ? this.sausages : this.ammo, weapon: this.hasWeapon(this.weapon) ? this.weapon : null, weapons: (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length, keys: this.keys, slices: this.slices, slicesTotal: this.slicesTotal, secrets: this.secrets, secretsTotal: this.secretsTotal, crosshair: !showBody && this.state === 'play' && !this.playerDead, visible: true });
+    this.hud.set({ boss: this.director && this.director.active ? Math.max(0.01, Math.ceil(this.director.boss.health / this.director.boss.maxHealth * 60) / 60) : 0, health: this.health, owned: this.arsenal.owned(), ammo: W2[this.weapon] ? this.arsenal.ammo(this.weapon) : this.weapon === 'turd' ? this.turds : this.weapon === 'candygun' ? this.candy : this.weapon === 'shotgun' ? this.sausages : this.ammo, weapon: this.hasWeapon(this.weapon) ? this.weapon : null, weapons: (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length, keys: this.keys, slices: this.slices, slicesTotal: this.slicesTotal, secrets: this.secrets, secretsTotal: this.secretsTotal, crosshair: !showBody && this.state === 'play' && !this.playerDead, visible: true });
     const tw = (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length > 1; if (tw !== this._tw) { this._tw = tw; document.body.classList.toggle('twoweap', tw); }
     this.hud.render(R, this.portrait.rt.texture);
   }
