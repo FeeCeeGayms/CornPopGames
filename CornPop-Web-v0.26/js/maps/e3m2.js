@@ -1,9 +1,9 @@
-// E1M2 — JUSTICE HALL. A grand hall with a pillared mezzanine ring (image 2), the Vehicle Bay with its
+// E3M2 (the original v0.24 E1M2, now part of Episode 3: The Pidser Cave) — JUSTICE HALL. A grand hall with a pillared mezzanine ring (image 2), the Vehicle Bay with its
 // gantry (blue key), the Training Range (shoot the targets for the red key) and the Justice Vault.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M2', title: 'E1M2: JUSTICE HALL', music: 'assets/music/cornquake_e1m2.mp3', ambience: 'cave', ambient: 18,
+  name: 'E3M2', title: 'E3M2: JUSTICE HALL', music: 'assets/music/cornquake_e1m2.mp3', ambience: 'cave', ambient: 18,
   fog: { color: [0.03, 0.03, 0.035], density: 0.0004 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [0.35, 0.6, 1], pattern: 'gentle' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }],
 }, 110, 96, 'concretedark', K => {

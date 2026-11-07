@@ -1,9 +1,9 @@
-// E1M3 — THE PIZZA VAULTS. The Pedestal Hall (image 3) with a climb to the overseer's office (blue key),
+// E3M3 (the original v0.24 E1M3, now part of Episode 3: The Pidser Cave) — THE PIZZA VAULTS. The Pedestal Hall (image 3) with a climb to the overseer's office (blue key),
 // the Sauce Moat Hall with its pizza tower (red key), and a vast Cold Storage rack maze before the exit.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M3', title: 'E1M3: THE PIZZA VAULTS', ambience: 'cave', music: 'assets/music/e1m3.mp3', ambient: 18,
+  name: 'E3M3', title: 'E3M3: THE PIZZA VAULTS', ambience: 'cave', music: 'assets/music/e1m3.mp3', ambient: 18,
   fog: { color: [0.025, 0.03, 0.04], density: 0.00035 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [0.35, 0.6, 1], pattern: 'gentle' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.2, 0.08], pattern: 'pulse' }],
 }, 112, 104, 'concretedark', K => {

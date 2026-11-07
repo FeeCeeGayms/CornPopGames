@@ -377,6 +377,28 @@ function makeAll() {
   T.neoncyan = (() => { const p = new Pix(16, 16); p.fill([0.3, 0.95, 1], 0.05); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, p.get(x, y), 1); return p.toTexture(); })();
   T.redlight = (() => { const p = new Pix(16, 16); p.fill([1, 0.12, 0.05], 0.05); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, p.get(x, y), 1); return p.toTexture(); })();
   T.greenlight = (() => { const p = new Pix(16, 16); p.fill([0.2, 1, 0.45], 0.05); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) p.set(x, y, p.get(x, y), 1); return p.toTexture(); })();
+  // ---- v0.25 tech-base set for the Doom II-style Episode 1 ----
+  const techPanel = (base, sd, band) => { srand(sd); const p = new Pix(64, 64); p.fill(base, 0.1); p.cloudy(1, 0.35);
+    for (const [x0, y0, w, h] of [[0, 0, 32, 26], [32, 0, 32, 26], [0, 38, 64, 26]]) p.bevel(x0, y0, w, h, 1.3, 0.6);
+    p.rect(0, 26, 64, 12, [base[0] * 0.35, base[1] * 0.35, base[2] * 0.35], 0.1); p.bevel(0, 26, 64, 12, 0.7, 1.3);
+    for (let x = 4; x < 64; x += 10) p.rect(x, 30, 4, 3, band, 0.05, 0.9);
+    for (const [x, y] of [[3, 3], [28, 3], [35, 3], [60, 3], [3, 41], [60, 41], [3, 60], [60, 60]]) p.rivet(x, y);
+    p.speckle(120, 0.6, 1.3); p.drips(8, 0.8); return p; };
+  T.techtan = techPanel(hex(0x8c7652), 401, [1, 0.75, 0.3]).toTexture();
+  T.techgray = techPanel(hex(0x6c6c70), 402, [0.4, 0.8, 1]).toTexture();
+  T.techgreen = techPanel(hex(0x4c5c48), 403, [0.4, 1, 0.4]).toTexture();
+  T.bigbrown = bricks(hex(0x5c4630), hex(0x221810), 16, 32, 0.3, 404).toTexture();
+  T.graystone = (() => { const p = bricks(hex(0x48484c), hex(0x1c1c20), 16, 21, 0.45, 405); p.cloudy(2, 0.4); p.speckle(300, 0.6, 1.3); return p.toTexture(); })();
+  T.mossstone = (() => { const p = bricks(hex(0x4a5040), hex(0x1a2014), 16, 24, 0.45, 406); srand(407); for (let i = 0; i < 260; i++) { const x = rnd() * 64, y = rnd() * 64; p.set(x, y, [0.18 + rnd() * 0.1, 0.32 + rnd() * 0.15, 0.1]); } p.drips(14, 0.75); return p.toTexture(); })();
+  T.slimewall = (() => { srand(408); const p = new Pix(64, 64); p.fill(hex(0x4a3c2c), 0.2); p.cloudy(1, 0.7); p.speckle(200, 0.5, 1.3);
+    for (let i = 0; i < 14; i++) { const x = rnd() * 64 | 0; const len = 10 + rnd() * 40; for (let j = 0; j < len; j++) { const w = j < 4 ? 2 : 1; for (let k = 0; k < w; k++) p.set(x + k, j, [0.35, 0.85, 0.12], j < len * 0.5 ? 0.6 : 0.2); } }
+    for (let x = 0; x < 64; x++) for (let y = 0; y < 3; y++) p.set(x, y, [0.3, 0.75, 0.1], 0.6); return p.toTexture(); })();
+  T.techfloor = (() => { srand(409); const p = new Pix(64, 64); p.fill(hex(0x4a4a4e), 0.1); p.cloudy(1, 0.4);
+    for (let ty = 0; ty < 2; ty++) for (let tx = 0; tx < 2; tx++) { p.bevel(tx * 32, ty * 32, 32, 32, 1.3, 0.55); p.shade(tx * 32 + 8, ty * 32 + 8, 16, 16, 0.8); p.bevel(tx * 32 + 8, ty * 32 + 8, 16, 16, 0.7, 1.3); }
+    p.speckle(160, 0.6, 1.3); return p.toTexture(); })();
+  T.support = (() => { srand(410); const p = new Pix(32, 64); p.fill(hex(0x5a5048), 0.12); p.cloudy(1, 0.4);
+    for (let y = 0; y < 64; y++) { p.mul(0, y, 1.4); p.mul(1, y, 1.2); p.mul(30, y, 0.7); p.mul(31, y, 0.5); p.mul(15, y, 0.8); p.mul(16, y, 1.2); }
+    for (let y = 4; y < 64; y += 10) { p.rivet(5, y); p.rivet(25, y); } p.drips(6, 0.7); return p.toTexture(); })();
   return T;
 }
 

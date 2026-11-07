@@ -1,9 +1,9 @@
-// E1M1 — THE PIDSER CAVE. Rainy street & parking lot outside, a two-level Monitor Hall hub inside,
+// E3M1 (the original v0.24 E1M1, now part of Episode 3: The Pidser Cave) — THE PIDSER CAVE. Rainy street & parking lot outside, a two-level Monitor Hall hub inside,
 // a crate-maze storage wing (red key), the Sauce Works (blue key) and an office route back up to the exit.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M1', title: 'E1M1: THE PIDSER CAVE', ambience: 'street', ambient: 14, music: 'assets/music/rotted_circuitry.mp3',
+  name: 'E3M1', title: 'E3M1: THE PIDSER CAVE', ambience: 'street', ambient: 14, music: 'assets/music/rotted_circuitry.mp3',
   fog: { color: [0.035, 0.025, 0.04], density: 0.00045 }, skyTint: [0.55, 0.4, 0.8],
   rain: { min: [64, 0, 1280], max: [3136, 560, 3008] },
   styles: [{ color: [1, 0.12, 0.08], pattern: 'neon' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.08], pattern: 'pulse' }],

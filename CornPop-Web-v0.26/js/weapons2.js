@@ -367,7 +367,7 @@ export class Arsenal {
   }
   // which levels hand out what
   placeAll(drop, ep, mi, i) {
-    const lv = ep === 1 ? mi : i, idx = ep === 1 ? 1 : 0;
+    const lv = mi, idx = ep === 1 ? 1 : 0;
     for (const k of W2_KEYS) if (lv >= START[k][idx]) { drop(W2[k].gun); drop(W2[k].ammoItem); if (lv > START[k][idx]) drop(W2[k].ammoItem); }
   }
   enemyDrop(pos) { // enemies sometimes drop ammo for something you're carrying

@@ -1,9 +1,9 @@
-// E1M4 — ORDER HEADQUARTERS. Through the red pipe into the Command Room (image 4), up the Stair Hall's
+// E3M4 (the original v0.24 E1M4, now part of Episode 3: The Pidser Cave) — ORDER HEADQUARTERS. Through the red pipe into the Command Room (image 4), up the Stair Hall's
 // three staircases (image 5), into the guard dorm, the briefing theatre (gold key) and the Order's vault.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M4', title: 'E1M4: ORDER HEADQUARTERS', ambience: 'kitchen', music: 'assets/music/e1m4.mp3', ambient: 18,
+  name: 'E3M4', title: 'E3M4: ORDER HEADQUARTERS', ambience: 'kitchen', music: 'assets/music/e1m4.mp3', ambient: 18,
   fog: { color: [0.035, 0.028, 0.025], density: 0.00035 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 0.6, 1], pattern: 'gentle' }],
 }, 112, 104, 'concretedark', K => {

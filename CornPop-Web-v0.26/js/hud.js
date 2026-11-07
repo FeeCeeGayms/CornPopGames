@@ -143,7 +143,11 @@ export class HUD {
     if (st.weapon) {
       const am = Math.max(0, st.ammo | 0);
       const w2 = W2[st.weapon];
-      if (w2) {
+      if (st.weapon === 'cutter') {
+        g.fillStyle = '#d8dce4'; g.beginPath(); g.arc(x0 + 200, y0 + 18, 8, 0, Math.PI * 2); g.fill(); g.fillStyle = '#7a7e86'; g.fillRect(x0 + 199, y0 + 17, 3, 3);
+        g.fillStyle = '#c8201c'; g.fillRect(x0 + 206, y0 + 22, 12, 4);
+        drawText(g, 'CUTTER', x0 + 194, y0 + 33, '#d0b0a0', 1, null);
+      } else if (w2) {
         bigNum(g, String(am).padStart(3, ' '), x0 + 192, y0 + 8, am > w2.low ? w2.col : '#ff6a3a', am > w2.low ? w2.dark : '#a03010');
         g.fillStyle = w2.pip; g.fillRect(x0 + 197, y0 + 32, 5, 5); g.fillStyle = '#fff'; g.fillRect(x0 + 198, y0 + 33, 1, 1);
         drawText(g, w2.label, x0 + 205, y0 + 33, w2.col, 1, null);

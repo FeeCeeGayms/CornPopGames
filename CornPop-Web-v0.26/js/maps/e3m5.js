@@ -1,10 +1,10 @@
-// E1M5 — THE KITCHENS. Up the service tunnel into the arched Prep Hall (image 6), the great brick Oven Room
+// E3M5 (the original v0.24 E1M5, now part of Episode 3: The Pidser Cave) — THE KITCHENS. Up the service tunnel into the arched Prep Hall (image 6), the great brick Oven Room
 // (red key over the sauce), the sunken Dish Pit (blue key tower), the two-storey Mess Hall, the Freezer
 // maze (gold key) and the Pantry, where the way out waits behind a final lunch rush.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M5', title: 'E1M5: THE KITCHENS', ambience: 'kitchen', music: 'assets/music/e1m5.mp3', ambient: 20,
+  name: 'E3M5', title: 'E3M5: THE KITCHENS', ambience: 'kitchen', music: 'assets/music/e1m5.mp3', ambient: 20,
   fog: { color: [0.04, 0.03, 0.022], density: 0.00032 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.3, 0.08], pattern: 'flicker' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 0.6, 1], pattern: 'gentle' }],
 }, 112, 104, 'brick', K => {

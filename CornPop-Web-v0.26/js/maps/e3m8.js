@@ -1,10 +1,10 @@
-// E1M8 — HORNT JAIL BREAKOUT. The riot has torn the jail apart (image: Hornt Jail, broken). Break out of
+// E3M8 (the original v0.24 E1M8, now part of Episode 3: The Pidser Cave) — HORNT JAIL BREAKOUT. The riot has torn the jail apart (image: Hornt Jail, broken). Break out of
 // your cell into the wrecked Cell Block B, wade the sludge-flooded sewer (red key), fire up the boiler
 // room (blue key), survive three riots in the Warden's Vault and climb to the rooftop to escape.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M8', title: 'E1M8: HORNT JAIL BREAKOUT', ambience: 'cave', music: 'assets/music/e1m8.mp3', ambient: 15,
+  name: 'E3M8', title: 'E3M8: HORNT JAIL BREAKOUT', ambience: 'cave', music: 'assets/music/e1m8.mp3', ambient: 15,
   fog: { color: [0.03, 0.032, 0.03], density: 0.00038 },
   rain: { min: [128, 0, 32], max: [1152, 600, 224] },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'flicker' }],

@@ -328,7 +328,7 @@ export class Trop {
 export class TropDirector {
   constructor(game) {
     this.game = game; const { ep, mi } = game;
-    this.budget = !game.tropAsset ? 0 : ep === 0 ? (mi < 2 ? 0 : 1) : (mi < 4 ? 1 : 2);
+    this.budget = !game.tropAsset ? 0 : ep !== 1 ? (mi < 2 ? 0 : 1) : (mi < 4 ? 1 : 2);
     this.sent = 0; this.checkT = 5; this.lastSent = -1e9;
   }
   get alive() { return this.game.enemies.some(e => e.kind === 'trop' && e.alive); }

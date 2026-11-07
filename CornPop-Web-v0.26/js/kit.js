@@ -54,7 +54,7 @@ export function makeLevel(meta, w, h, defaultSolidTex, fn) {
   // doors are painted cells with their own unique char; base = spec of the floor they sit on
   K.door = (c0, r0, c1, r1, base, o = {}) => {
     const baseCh = K.type(base); const ch = alloc();
-    doors[ch] = { cell: baseCh, top: o.top || 112, key: o.key, tex: o.tex, name: o.name, thin: o.thin, wait: o.wait, targeted: o.targeted, speed: o.speed, message: o.message, upper: o.upper };
+    doors[ch] = { cell: baseCh, top: o.top || 112, key: o.key, tex: o.tex, name: o.name, thin: o.thin, wait: o.wait, targeted: o.targeted, speed: o.speed, message: o.message, upper: o.upper, dir: o.dir, secret: o.secret };
     K.paint(c0, r0, c1, r1, ch); return ch;
   };
   K.gate = (c0, r0, c1, r1, base, name, o = {}) => K.door(c0, r0, c1, r1, base, { tex: 'bars', thin: true, name, wait: o.wait ?? 2, top: o.top || 112, speed: 160, ...o });
@@ -270,6 +270,53 @@ export function makeLevel(meta, w, h, defaultSolidTex, fn) {
       }
     }
   });
+
+  // ---------- Doom II-style building blocks (v0.25) ----------
+  // outdoor yard: open sky at f + h, so its walls are h tall with sky above them (Doom's F_SKY1 courtyards)
+  K.yard = (c0, r0, c1, r1, o) => { const ch = K.type({ f: o.f, c: o.f + (o.h || 256), floor: o.floor || 'dirt', ceil: 'sky', side: o.side || 'stepside', upper: o.upper, sky: true }); if (o.wall) K.room(c0, r0, c1, r1, { f: o.f, c: o.f + (o.h || 256), floor: o.floor || 'dirt', ceil: 'sky', side: o.side || 'stepside', upper: o.upper, sky: true }, o.wall); else K.paint(c0, r0, c1, r1, ch); return ch; };
+  K.skySpec = (f, h, floor, side = 'stepside', upper) => ({ f, c: f + h, floor, ceil: 'sky', side, upper, sky: true });
+  // room with chamfered (stepped) corners - the grid's answer to Doom's angled walls
+  K.octo = (c0, r0, c1, r1, spec, ch = 2, wallTex) => {
+    const t = K.room(c0, r0, c1, r1, spec, wallTex); const sol = K.solid(wallTex || defaultSolidTex);
+    for (let i = 0; i < ch; i++) for (let j = 0; j < ch - i; j++) { K.paint(c0 + i, r0 + j, c0 + i, r0 + j, sol); K.paint(c1 - i, r0 + j, c1 - i, r0 + j, sol); K.paint(c0 + i, r1 - j, c0 + i, r1 - j, sol); K.paint(c1 - i, r1 - j, c1 - i, r1 - j, sol); }
+    return t;
+  };
+  // nukage: green grease sludge, lowered floor, damage while you wade in it
+  K.nukage = (c0, r0, c1, r1, spec, depth = 16, dps = 8) => K.pool(c0, r0, c1, r1, spec, 'sludge', depth, dps);
+  // a window: raised sill + lowered lintel between two areas (shoot through, can't walk through)
+  K.window = (c0, r0, c1, r1, f, c, side = 'trim', upper = 'trim', floor = 'metal', ceil = 'metal') => K.paint(c0, r0, c1, r1, K.type({ f, c, floor, ceil, side, upper }));
+  // teleporter pad (glowing ring + light) that sends you to cell (dc, dr)
+  K.teleporter = (c0, r0, c1, r1, dc, dr, angle = 0, o = {}) => {
+    const x0 = X(c0), z0 = Z(r0), x1 = X(c1 + 1), z1 = Z(r1 + 1), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    post(ctx => {
+      const y = o.y ?? ctx.floor(c0, r0), r = Math.min(x1 - x0, z1 - z0) / 2;
+      ctx.ent({ type: 'teleport', min: [x0 + 4, y, z0 + 4], max: [x1 - 4, y + 96, z1 - 4], dest: [C(dc), (o.destY ?? ctx.floor(dc, dr)) + 24.1, C(dr)], angle });
+      ctx.props.ring(cx, y + 2, cz, r - 12, r - 3, 4, 'x', 0, Math.PI * 2, 'chrome', 24);
+      ctx.decal({ at: [cx, y, cz], n: 'up', w: (r - 12) * 2, h: (r - 12) * 2, tex: o.tex || 'glowgreen', fullbright: true, off: 0.6 });
+      ctx.light(cx, y + 40, cz, 220, o.color || [0.4, 1, 0.5], 2);
+      ctx.emitter({ min: [x0 + 10, y, z0 + 10], max: [x1 - 10, y + 30, z1 - 10], type: 'bubbles', rate: 6, color: o.color || [0.4, 1, 0.5] });
+    });
+  };
+  // switch on a wall (a USE / shootable button) that targets a named mover
+  K.switch = (x, y, z, n, target, msg, o = {}) => post(ctx => {
+    const d = { px: [1, 0], nx: [-1, 0], pz: [0, 1], nz: [0, -1] }[n]; const ax = d[0] !== 0;
+    const min = ax ? [x - (d[0] < 0 ? 6 : 0), y - 14, z - 14] : [x - 14, y - 14, z - (d[1] < 0 ? 6 : 0)];
+    const max = ax ? [x + (d[0] > 0 ? 6 : 0), y + 14, z + 14] : [x + 14, y + 14, z + (d[1] > 0 ? 6 : 0)];
+    ctx.brush(min, max, { tex: 'metal', solid: false, noshadow: true });
+    ctx.decal({ at: [x + d[0] * 6.5, y, z + d[1] * 6.5], n, w: 22, h: 22, tex: o.green ? 'buttongreen' : 'button', off: 0.5, fullbright: true });
+    ctx.light(x + d[0] * 30, y, z + d[1] * 30, 110, o.green ? [0.4, 1, 0.4] : [1, 0.4, 0.3]);
+    ctx.button({ min: [min[0] - 2, min[1], min[2] - 2], max: [max[0] + 2, max[1], max[2] + 2], target, msg, shoot: true, wave: o.wave });
+  });
+  // a "Doom lift": plat over cells (c0,r0)-(c1,r1) from floor lowF up to highF
+  K.liftCells = (c0, r0, c1, r1, lowF, highF, o = {}) => { K.lift([X(c0) + 2, lowF, Z(r0) + 2], [X(c1 + 1) - 2, lowF + 8, Z(r1 + 1) - 2], highF - lowF - 8, { wait: 3, ...o }); post(ctx => ctx.light(C((c0 + c1) / 2), lowF + 60, C((r0 + r1) / 2), 160, [1, 0.85, 0.5])); };
+  // dough press (crusher): a block hanging under the ceiling at `top`, h thick, that slams down to floorY + 8 and back
+  K.crusher = (c0, r0, c1, r1, top, floorY, o = {}) => post(ctx => {
+    const h = o.h || 48; const m = ctx.mover({ type: 'crusher', min: [X(c0), top - h, Z(r0)], max: [X(c1 + 1), top, Z(r1 + 1)], tex: o.tex || 'support', topTex: 'metal', align: 'world', travel: top - h - floorY - 8, speed: o.speed || 200, wait: o.wait ?? 1.2, damage: o.damage || 10, skip: ['top'] });
+    m.t = o.phase || 0;
+    ctx.decal({ at: [(X(c0) + X(c1 + 1)) / 2, floorY, (Z(r0) + Z(r1 + 1)) / 2], n: 'up', w: X(c1 + 1) - X(c0) - 8, h: Z(r1 + 1) - Z(r0) - 8, tex: 'hazard', off: 0.3 });
+  });
+  // simple light strip down the middle of a hall (Doom LITE textures)
+  K.strip = (x0, z0, x1, z1, y, step = 192, color = [1, 0.95, 0.85], light = 300) => { const alongX = Math.abs(x1 - x0) >= Math.abs(z1 - z0); const n = Math.max(1, Math.round(Math.hypot(x1 - x0, z1 - z0) / step)); for (let i = 0; i <= n; i++) { const t = n ? i / n : 0.5; K.fixture(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, y, 64, alongX ? 'x' : 'z', 'light', light, color); } };
 
   fn(K);
   const map = g.map(row => row.join(''));

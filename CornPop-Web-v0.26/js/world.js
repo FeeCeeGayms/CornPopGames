@@ -203,7 +203,7 @@ export class World {
       const inset = def.thin ? 10 : 0;
       const min = [c0 * CELL + (horizontalRun ? 0 : inset), e.f, r0 * CELL + (horizontalRun ? inset : 0)];
       const max = [(c1 + 1) * CELL - (horizontalRun ? 0 : inset), e.c, (r1 + 1) * CELL - (horizontalRun ? inset : 0)];
-      this.addMover({ type: 'door', min, max, key: def.key, tex: def.tex || (def.key ? 'door_' + def.key : 'door'), name: def.name, targeted: def.targeted, wait: def.wait ?? (def.key ? -1 : 4), lip: 8, speed: def.speed || 110, message: def.message });
+      this.addMover({ type: 'door', min, max, key: def.key, tex: def.tex || (def.key ? 'door_' + def.key : 'door'), name: def.name, targeted: def.targeted, wait: def.wait ?? (def.key ? -1 : 4), lip: 8, speed: def.speed || 110, message: def.message, dir: def.dir, secret: def.secret });
     }
   }
   addMover(m) {

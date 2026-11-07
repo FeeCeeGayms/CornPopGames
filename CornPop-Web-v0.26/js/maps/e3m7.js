@@ -1,11 +1,11 @@
-// E1M7 — HORNT JAIL. "No hope. No escape. Only time." Two-tier cell blocks face each other across Cell
+// E3M7 (the original v0.24 E1M7, now part of Episode 3: The Pidser Cave) — HORNT JAIL. "No hope. No escape. Only time." Two-tier cell blocks face each other across Cell
 // Block A (images: Hornt Jail, cells 101-103), with the guard desk and its monitors in the middle. Up to the
 // Warden's office (red key, lockdown), down into Solitary (blue key), out across the rain-soaked Exercise
 // Yard and its guard towers (gold key) and into the evidence Vault.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M7', title: 'E1M7: HORNT JAIL', ambience: 'cave', music: 'assets/music/e1m7.mp3', ambient: 16,
+  name: 'E3M7', title: 'E3M7: HORNT JAIL', ambience: 'cave', music: 'assets/music/e1m7.mp3', ambient: 16,
   fog: { color: [0.03, 0.03, 0.035], density: 0.00034 },
   rain: { min: [640, 0, 128], max: [2912, 448, 1312] },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'flicker' }],

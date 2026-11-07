@@ -14,7 +14,16 @@ const game = new Game();
 function rawLock() { const c = game.canvas; if (!c.requestPointerLock) return; try { const p = c.requestPointerLock({ unadjustedMovement: true }); if (p && p.catch) p.catch(() => { try { c.requestPointerLock(); } catch (e) { } }); } catch (e) { try { c.requestPointerLock(); } catch (e2) { } } }
 window.game = game;
 
+// only one map load at a time: the death screen (and the intermission) asked to restart on every frame the jump button was
+// held, and each request started its own load, so a map could be built two or three times over (doubled doors, extra enemies,
+// slow frames). Requests that arrive while a load is running are ignored.
+let levelBusy = false;
 async function startLevel(i, mode = 'select') {
+  if (levelBusy) return;
+  levelBusy = true; game.state = 'loading';
+  try { await startLevel1(i, mode); } finally { levelBusy = false; }
+}
+async function startLevel1(i, mode) {
   game.prepareCarry(i, mode);
   stack = []; show('loading'); setLoad(0, `Entering ${LEVELS[i].title}`);
   game.sfx.unlock();
@@ -33,7 +42,7 @@ game.onPause = () => { stack = ['pause']; syncOptions(); show('pause'); };
 game.onResume = () => { stack = []; show(null); if (!game.input.isTouch) rawLock(); };
 game.onLevelChange = (i) => startLevel(i, 'next');
 game.onRestart = (i) => startLevel(i, 'restart');
-game.onEpisodeEnd = (ep) => { game.sfx.stopAmbient(); game.sfx.playSong(null); game.state = 'loading'; stack = ['title']; show('title'); $('titlemsg').textContent = ep === 0 ? 'EPISODE 1 COMPLETE! NEW YORK NEEDS YOU: START EPISODE 2' : 'CORNPOP SAVED NEW YORK! THANKS FOR PLAYING'; buildLevelList(); };
+game.onEpisodeEnd = (ep) => { game.sfx.stopAmbient(); game.sfx.playSong(null); game.state = 'loading'; stack = ['title']; show('title'); $('titlemsg').textContent = ['EPISODE 1 COMPLETE! NEW YORK NEEDS YOU: START EPISODE 2', 'NEW YORK IS SAVED! THE QOQS RAN BACK HOME: START EPISODE 3', 'CORNPOP CONQUERED THE PIDSER CAVE! THANKS FOR PLAYING'][ep]; buildLevelList(); };
 
 function buildLevelList() {
   const L = $('levellist'); L.innerHTML = '';
@@ -41,7 +50,7 @@ function buildLevelList() {
     const h = document.createElement('h4'); h.textContent = E.title; L.appendChild(h);
     for (let k = 0; k < E.count; k++) {
       const i = E.start + k, lv = LEVELS[i]; if (!lv) continue;
-      const b = document.createElement('button'); b.textContent = lv.title; b.disabled = k + 1 > ((ep === 0 ? game.progress.unlocked : game.progress.unlocked2) || 1);
+      const b = document.createElement('button'); b.textContent = lv.title; b.disabled = k + 1 > (game.progress[['unlocked', 'unlocked2', 'unlocked3'][ep]] || 1);
       b.onclick = () => { game.sfx.unlock(); game.sfx.play('menu'); goFullscreen(); startLevel(i); }; L.appendChild(b);
     }
   });
@@ -65,7 +74,7 @@ document.addEventListener('click', e => {
   game.sfx.unlock(); game.sfx.play('menu');
   const act = b.dataset.act;
   if (act === 'new') push('episodes');
-  else if (act === 'ep1' || act === 'ep2') { goFullscreen(); const E = EPISODES[act === 'ep1' ? 0 : 1]; startLevel(E.start, 'new'); }
+  else if (/^ep[123]$/.test(act)) { goFullscreen(); const E = EPISODES[+act[2] - 1]; startLevel(E.start, 'new'); }
   else if (act === 'levels') { buildLevelList(); push('levels'); }
   else if (act === 'options') { syncOptions(); push('options'); }
   else if (act === 'help') push('help');

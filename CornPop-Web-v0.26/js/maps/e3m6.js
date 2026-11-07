@@ -1,10 +1,10 @@
-// E1M6 — POTATO QUARTERS. The Order's living wing: a long dormitory corridor lined with potato-power
+// E3M6 (the original v0.24 E1M6, now part of Episode 3: The Pidser Cave) — POTATO QUARTERS. The Order's living wing: a long dormitory corridor lined with potato-power
 // bedrooms (image: bedroom), the Greenhouse (red key), the two-storey Lounge with its porthole skyline
 // windows (image: lounge), the Library (blue key behind the book switches) and the rooftop Observation Deck.
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E1M6', title: 'E1M6: POTATO QUARTERS', ambience: 'kitchen', music: 'assets/music/e1m6.mp3', ambient: 18,
+  name: 'E3M6', title: 'E3M6: POTATO QUARTERS', ambience: 'kitchen', music: 'assets/music/e1m6.mp3', ambient: 18,
   fog: { color: [0.035, 0.028, 0.02], density: 0.0003 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.3, 0.1], pattern: 'neon' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.45], pattern: 'gentle' }],
 }, 112, 104, 'brickdark', K => {

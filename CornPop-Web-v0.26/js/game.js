@@ -12,6 +12,7 @@ import { Arsenal, W2, W2_KEYS, makeW2Pickup } from './weapons2.js';
 import { BCM_ANIMS, BossDirector } from './boss.js';
 import { TROP_ANIMS, TropDirector } from './trop.js';
 import { Qoq, QOQ, QOQ_ANIMS, MARV, MARV_ANIMS, BALLINKI, BALLINKI_ANIMS, FRENTA, FRENTA_ANIMS, BEANS, BEANS_ANIMS, makePotato, TURD, SOAKER, SHOTGUN, CANDYGUN, Soaker, Shotgun, CandyGun, TurdLauncher, makeTurd, Particles, makeChicken, makeTissue, makeSausage, makeCandyCorn, makePickupModel, segAabb, LIT } from './combat.js';
+import { PizzaCutter } from './cutter.js';
 
 THREE.ColorManagement.enabled = false;
 
@@ -224,7 +225,7 @@ void main(){ vec2 p = vUv*2.0-1.0; float r = length(p); if (r>1.0) discard; floa
 export class Game {
   constructor() {
     this.opts = loadJSON(OPTS_KEY, { sens: 1, touchSens: 1, invert: false, res: 240, fov: 100, vol: 0.7, music: 0.5, songVol: 0.7, third: false, gamma: 1.15, touchUI: 'auto', retro: false, reflect: true, gfx: 'ultra', autoHop: false, showFps: false, dynres: true });
-    this.progress = loadJSON(PROG_KEY, { unlocked: 1, unlocked2: 1 });
+    this.progress = loadJSON(PROG_KEY, { unlocked: 1, unlocked2: 1, unlocked3: 1 });
     this.canvas = document.getElementById('game');
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
@@ -347,7 +348,7 @@ export class Game {
     this.beansAsset.animMap = BEANS_ANIMS;
     try { this.bcmAsset = await new CornPopAsset().load('assets/models/bcm.glb', p => onProgress(0.99, 'Loading BCM')); this.bcmAsset.animMap = BCM_ANIMS; } catch (e) { console.warn('BCM model missing', e); this.bcmAsset = null; }
     try { this.tropAsset = await new CornPopAsset().load('assets/models/trop.glb', p => onProgress(0.995, 'Loading Trop')); this.tropAsset.animMap = TROP_ANIMS; } catch (e) { console.warn('Trop model missing', e); this.tropAsset = null; }
-    this.soaker = new Soaker(this); this.shotgun = new Shotgun(this); this.candygun = new CandyGun(this); this.turdgun = new TurdLauncher(this); this.arsenal = new Arsenal(this); this.aim = new THREE.Object3D();
+    this.soaker = new Soaker(this); this.cutter = new PizzaCutter(this); this.shotgun = new Shotgun(this); this.candygun = new CandyGun(this); this.turdgun = new TurdLauncher(this); this.arsenal = new Arsenal(this); this.aim = new THREE.Object3D();
     for (const w of Object.values(this.arsenal.guns)) try { this.renderer.compile(w.scene, w.cam); } catch (e) { } // no shader hitch on the first switch
     this.carry = this.freshCarry(0);
     this.gooCanvas = document.createElement('canvas'); this.gooCanvas.width = 160; this.gooCanvas.height = 96;
@@ -391,7 +392,7 @@ export class Game {
   freshCarry(i) {
     const { ep, mi } = episodeOf(i);
     if (ep === 1) return { health: 100, ammo: SOAKER.startAmmo + 50, hasSoaker: true, hasShotgun: true, sausages: 24, hasCandy: mi >= 2, candy: mi >= 2 ? 120 : 0, hasTurd: mi >= 4, turds: mi >= 4 ? 8 : 0, inv: Arsenal.freshInv(ep, mi), weapon: 'shotgun' };
-    return { health: 100, ammo: i > 0 ? SOAKER.startAmmo : 0, hasSoaker: i > 0, hasShotgun: false, sausages: 0, hasCandy: false, candy: 0, hasTurd: false, turds: 0, inv: Arsenal.freshInv(ep, mi), weapon: 'soaker' };
+    return { health: 100, ammo: mi > 0 ? SOAKER.startAmmo : 0, hasSoaker: mi > 0, hasShotgun: false, sausages: 0, hasCandy: false, candy: 0, hasTurd: false, turds: 0, inv: Arsenal.freshInv(ep, mi), weapon: mi > 0 ? 'soaker' : 'cutter' }; // E1M1 / E3M1 start with just the pizza cutter (Episode 3 runs the same weapon schedule as Episode 1)
   }
   // carry health / ammo / weapon between levels (mode: new | select | next | restart)
   prepareCarry(i, mode) {
@@ -440,7 +441,7 @@ export class Game {
     this.health = this.carry.health; this.ammo = this.carry.ammo; this.hasSoaker = this.carry.hasSoaker; this.levelStartCarry = { ...this.carry };
     this.hasShotgun = !!this.carry.hasShotgun; this.sausages = this.carry.sausages || 0; this.hasCandy = !!this.carry.hasCandy; this.candy = this.carry.candy || 0; this.hasTurd = !!this.carry.hasTurd; this.turds = this.carry.turds || 0;
     this.arsenal.load(this.carry.inv); this.arsenal.reset();
-    this.weapon = this.hasWeapon(this.carry.weapon) ? this.carry.weapon : 'soaker'; this.candyShots = []; this.turdShots = []; this.fireballs = [];
+    this.weapon = this.hasWeapon(this.carry.weapon) ? this.carry.weapon : this.hasSoaker ? 'soaker' : 'cutter'; this.cutter.raise = 1; this.candyShots = []; this.turdShots = []; this.fireballs = [];
     this.gooT = 0; this.blitMat.uniforms.goo.value = 0; this.tissues = []; this.sausageShots = []; this.farts = []; this.piles = []; this.potatoes = []; this.debris = []; this.sickT = 0; this.retchT = 0; this.retchCd = 0;
     this.fires = [];
     this.kills = 0; this.playerDead = false; this.noiseT = 0; this.trail = []; this.chickens = []; this.droplets = []; this.puddles = []; this.splashT = 0;
@@ -449,9 +450,9 @@ export class Game {
     if (ep === 1) { // Episode 2 (New York): the whole gang from the first street - Marvs, Ballinkis, a rising share of Frentas (1 in 9 ... 1 in 4), Beans
       let n = 0, j = 0;
       for (const e of this.ents) { if (e.type === 'qoq') { const k = n++; const fr = [9, 8, 7, 6, 6, 5, 5, 4][mi]; if (k % 4 === 2) e.type = 'marv'; else if (k % 5 === 4 && !e.turret) e.type = 'ballinki'; else if (k % fr === 1) e.type = 'frenta'; } else if (e.type === 'juice') { const q = j++ % 8; if (q === 1 || q === 5) { e.type = 'sausages'; e.amount = SHOTGUN.boxAmmo; } else if (q === 6) { e.type = 'candybag'; e.amount = CANDYGUN.bagAmmo; } else if (q === 2 && mi >= 2) { e.type = 'turdbox'; e.amount = TURD.boxAmmo; } } }
-    } else if (i > 0) { // every 4th Qoq in E1M2+ is a Marv, from E1M4 every 5th a Ballinki, and a growing share are Frentas (1 in 14 in E1M2 ... 1 in 4 in E1M8); some juice jugs become sausage boxes / candy bags
+    } else if (mi > 0) { // Episodes 1 and 3: every 4th Qoq in xxM2+ is a Marv, from E1M4 every 5th a Ballinki, and a growing share are Frentas (1 in 14 in E1M2 ... 1 in 4 in E1M8); some juice jugs become sausage boxes / candy bags
       let n = 0, j = 0;
-      for (const e of this.ents) { if (e.type === 'qoq') { const k = n++; const fr = [0, 14, 11, 9, 8, 6, 5, 4][i]; if (k % 4 === 2) e.type = 'marv'; else if (i >= 3 && k % 5 === 4 && !e.turret) e.type = 'ballinki'; else if (fr && k % fr === 1) e.type = 'frenta'; } else if (e.type === 'juice' && j++ % 4 === 1) { e.type = 'sausages'; e.amount = SHOTGUN.boxAmmo; } else if (i >= 2 && e.type === 'juice' && (j - 1) % 8 === 6) { e.type = 'candybag'; e.amount = CANDYGUN.bagAmmo; } else if (i >= 3 && e.type === 'juice' && (j - 1) % 8 === 2) { e.type = 'turdbox'; e.amount = TURD.boxAmmo; } }
+      for (const e of this.ents) { if (e.type === 'qoq') { const k = n++; const fr = [0, 14, 11, 9, 8, 6, 5, 4][mi]; if (k % 4 === 2) e.type = 'marv'; else if (mi >= 3 && k % 5 === 4 && !e.turret) e.type = 'ballinki'; else if (fr && k % fr === 1) e.type = 'frenta'; } else if (e.type === 'juice' && j++ % 4 === 1) { e.type = 'sausages'; e.amount = SHOTGUN.boxAmmo; } else if (mi >= 2 && e.type === 'juice' && (j - 1) % 8 === 6) { e.type = 'candybag'; e.amount = CANDYGUN.bagAmmo; } else if (mi >= 3 && e.type === 'juice' && (j - 1) % 8 === 2) { e.type = 'turdbox'; e.amount = TURD.boxAmmo; } }
     }
     { let b = 0; for (const e of this.ents) if (e.type === 'qoq' && b++ % 2 === 1) e.type = 'beans'; } // half of the remaining Qoqs are Beans
     this.placeExtras(i);
@@ -630,6 +631,26 @@ export class Game {
     const out = []; if (lift(this.player.pos)) out.push(this.player.pos); for (const q of this.enemies) if (q.alive && !q.dormant && lift(q.pos)) out.push(q.pos);
     return out;
   }
+  // dough presses (Doom crushers): a heavy block that slams down, squashes whatever is under it, then grinds back up
+  updateCrushers(dt) {
+    for (const m of this.world.movers) {
+      if (m.type !== 'crusher') continue;
+      const span = m.travel; let off = m.offset; m.t = (m.t || 0) + dt;
+      const inside = (pos, top) => pos[0] + 16 > m.base.min[0] && pos[0] - 16 < m.base.max[0] && pos[2] + 16 > m.base.min[2] && pos[2] - 16 < m.base.max[2] && top <= m.base.min[1] + 2;
+      if (m.state === 'closed') { if (m.t > (m.wait ?? 1.2)) { m.state = 'opening'; m.t = 0; m.hold = 0; } }      // 'opening' = coming down
+      else if (m.state === 'opening') {
+        let want = Math.min(span, off + m.speed * dt), victim = null;
+        const bottom = (o) => m.base.min[1] - o;
+        const pl = this.player; if (!this.playerDead && inside(pl.pos, pl.pos[1] + 32)) { const top = pl.pos[1] + 30; if (bottom(want) < top) { want = Math.max(off, m.base.min[1] - top); victim = 'player'; } }
+        for (const q of this.enemies) { if (!q.alive || q.dormant || q.boss) continue; const top = q.pos[1] + q.K.height - 22; if (inside(q.pos, top) && bottom(want) < top) { want = Math.max(off, m.base.min[1] - top); victim = victim || q; } }
+        off = want;
+        if (victim) { m.hold += dt; m.dmgT = (m.dmgT || 0) - dt; if (m.dmgT <= 0) { m.dmgT = 0.25; if (victim === 'player') this.damagePlayer(m.damage || 10); else victim.hurt(m.damage || 10, false); this.sfx.play('squelch'); } }
+        if (off >= span || m.hold > 1.6) { m.state = 'open'; m.t = 0; this.sfx.play('thud'); }
+      } else if (m.state === 'open') { if (m.t > 0.4) { m.state = 'closing'; m.t = 0; } }
+      else if (m.state === 'closing') { off = Math.max(0, off - m.speed * 0.6 * dt); if (off <= 0) { m.state = 'closed'; m.t = 0; } }
+      if (off !== m.offset) { m.offset = off; m.brush.min[1] = m.base.min[1] - off; m.brush.max[1] = m.base.max[1] - off; m.group.position.y = m.base.min[1] - off; }
+    }
+  }
   updatePlats(dt) {
     for (const m of this.world.movers) {
       if (m.type !== 'plat') continue;
@@ -758,9 +779,9 @@ export class Game {
     const { ep, mi } = episodeOf(i);
     this.arsenal.placeAll(drop, ep, mi, i);
     if (ep === 1) { drop('shotgun'); if (mi >= 2) drop('candygun'); if (mi >= 4) drop('turdgun'); return; } // E2: candy gun lies at the start of E2M2, the turd launcher at the start of E2M4
-    if (i >= 2) drop('shotgun');
-    if (i >= 3) drop('candygun');
-    if (i >= 4) drop('turdgun');
+    if (mi >= 2) drop('shotgun');
+    if (mi >= 3) drop('candygun');
+    if (mi >= 4) drop('turdgun');
   }
   // don't let CornPop stand on a Qoq's head: slide him off sideways (and give the Qoq a shove the other way)
   slideOffHeads() {
@@ -776,9 +797,9 @@ export class Game {
     }
   }
   // ---- weapons ----
-  hasWeapon(w) { if (W2[w]) return this.arsenal.has(w); return w === 'soaker' ? this.hasSoaker : w === 'shotgun' ? this.hasShotgun : w === 'candygun' ? this.hasCandy : w === 'turd' ? this.hasTurd : false; }
-  weaponAmmo(w) { if (W2[w]) return this.arsenal.ammo(w); return w === 'shotgun' ? (this.sausages >= SHOTGUN.perShot ? this.sausages : 0) : w === 'candygun' ? this.candy : w === 'turd' ? this.turds : this.ammo; }
-  weaponObj(w) { if (W2[w]) return this.arsenal.guns[w]; return w === 'shotgun' ? this.shotgun : w === 'candygun' ? this.candygun : w === 'turd' ? this.turdgun : this.soaker; }
+  hasWeapon(w) { if (W2[w]) return this.arsenal.has(w); if (w === 'cutter') return true; return w === 'soaker' ? this.hasSoaker : w === 'shotgun' ? this.hasShotgun : w === 'candygun' ? this.hasCandy : w === 'turd' ? this.hasTurd : false; }
+  weaponAmmo(w) { if (W2[w]) return this.arsenal.ammo(w); if (w === 'cutter') return 1; return w === 'shotgun' ? (this.sausages >= SHOTGUN.perShot ? this.sausages : 0) : w === 'candygun' ? this.candy : w === 'turd' ? this.turds : this.ammo; }
+  weaponObj(w) { if (W2[w]) return this.arsenal.guns[w]; if (w === 'cutter') return this.cutter; return w === 'shotgun' ? this.shotgun : w === 'candygun' ? this.candygun : w === 'turd' ? this.turdgun : this.soaker; }
   setWeapon(w, force) {
     if (!this.hasWeapon(w)) return;
     if (w === this.weapon && !force) return;
@@ -786,11 +807,11 @@ export class Game {
     this.ui.weap && this.ui.weap.classList.toggle('alt', w !== 'soaker');
   }
   cycleWeapon(dir = 1) {
-    const order = ['soaker', 'shotgun', 'candygun', 'turd', ...W2_KEYS], N = order.length; let k = order.indexOf(this.weapon);
+    const order = ['cutter', 'soaker', 'shotgun', 'candygun', 'turd', ...W2_KEYS], N = order.length; let k = order.indexOf(this.weapon);
     for (let n = 0; n < N; n++) { k = (k + dir + N) % N; if (this.hasWeapon(order[k])) { this.setWeapon(order[k]); return; } }
   }
   autoSwitch() { // out of ammo: take the best other weapon that still has some
-    for (const w of ['jelly', 'sauce', 'candygun', 'rail', 'shotgun', 'cola', 'soaker', 'turd', 'fondue']) if (w !== this.weapon && this.hasWeapon(w) && this.weaponAmmo(w) > 0) { this.setWeapon(w); return; }
+    for (const w of ['jelly', 'sauce', 'candygun', 'rail', 'shotgun', 'cola', 'soaker', 'turd', 'fondue', 'cutter']) if (w !== this.weapon && this.hasWeapon(w) && this.weaponAmmo(w) > 0) { this.setWeapon(w); return; }
   }
   // ---- death piles: Qoqs burst into chicken feathers, Marvs into a white goo puddle, Ballinkis into pubes + a yellow puddle ----
   deathPile(e) {
@@ -1275,7 +1296,7 @@ export class Game {
         if (this.overlap(p, [e.pos[0] - 16, e.pos[1], e.pos[2] - 16], [e.pos[0] + 16, e.pos[1] + 40, e.pos[2] + 16])) {
           if (this.arsenal.isItem(e.type)) { if (!this.arsenal.pickup(e)) continue; }
           else if (e.type === 'soaker') {
-            const had = this.hasSoaker; this.hasSoaker = true; this.ammo = Math.min(SOAKER.maxAmmo, this.ammo + SOAKER.startAmmo); this.soaker.raise = 1;
+            const had = this.hasSoaker; this.hasSoaker = true; this.ammo = Math.min(SOAKER.maxAmmo, this.ammo + SOAKER.startAmmo); this.soaker.raise = 1; if (!had) this.setWeapon('soaker', true);
             this.message(had ? 'More juice for the Super Soaker!' : 'You got the SUPER SOAKER!\nHold FIRE to spray acid juice'); this.sfx.play('weapon'); this.bonusFlash([1, 0.9, 0.2], 0.4); this.emote('happy');
           } else if (e.type === 'shotgun') {
             const had = this.hasShotgun; this.hasShotgun = true; this.sausages = Math.min(SHOTGUN.maxAmmo, this.sausages + SHOTGUN.pickupAmmo); this.setWeapon('shotgun', true);
@@ -1353,8 +1374,8 @@ export class Game {
     this.carry = { health: Math.max(1, Math.ceil(this.health)), ammo: this.ammo, hasSoaker: this.hasSoaker, hasShotgun: this.hasShotgun, sausages: this.sausages, hasCandy: this.hasCandy, candy: this.candy, hasTurd: this.hasTurd, turds: this.turds, inv: this.arsenal.save(), weapon: this.weapon };
     const { ep, mi } = episodeOf(this.levelIndex), E = EPISODES[ep];
     const last = mi + 1 >= E.count, nextIndex = last ? -1 : this.levelIndex + 1;
-    if (!last) { const k = ep === 0 ? 'unlocked' : 'unlocked2'; this.progress[k] = Math.max(this.progress[k] || 1, mi + 2); }
-    else if (ep === 0) this.progress.e1done = true;
+    if (!last) { const k = ['unlocked', 'unlocked2', 'unlocked3'][ep]; this.progress[k] = Math.max(this.progress[k] || 1, mi + 2); }
+    else this.progress['e' + (ep + 1) + 'done'] = true;
     saveJSON(PROG_KEY, this.progress);
     this.state = 'intermission'; this.intermission = { t: 0, next: nextIndex, ep };
     this.emote('bow');
@@ -1410,7 +1431,7 @@ export class Game {
     const last = this.trail[this.trail.length - 1];
     if (pl.onground && (!last || Math.hypot(pl.pos[0] - last[0], pl.pos[1] - last[1], pl.pos[2] - last[2]) > 56)) { this.trail.push(pl.pos.slice()); if (this.trail.length > 200) { this.trail.shift(); for (const e of this.enemies) e.trailIdx--; } }
     for (let a = 0; a < 3; a++) { this.playerBrush.min[a] = pl.pos[a] + HULL_MIN[a]; this.playerBrush.max[a] = pl.pos[a] + pl.hmax[a]; }
-    this.safe('doors', () => this.updateDoors(dt)); this.safe('plats', () => this.updatePlats(dt)); this.safe('items', () => this.updateEnts(dt, cmd)); this.safe('boss', () => this.director && this.director.update(dt)); this.safe('trop', () => this.trops && this.trops.update(dt)); this.safe('waves', () => this.updateWaves()); this.updateStyles(); this.safe('rain', () => this.updateRain(dt));
+    this.safe('doors', () => this.updateDoors(dt)); this.safe('plats', () => this.updatePlats(dt)); this.safe('crushers', () => this.updateCrushers(dt)); this.safe('items', () => this.updateEnts(dt, cmd)); this.safe('boss', () => this.director && this.director.update(dt)); this.safe('trop', () => this.trops && this.trops.update(dt)); this.safe('waves', () => this.updateWaves()); this.updateStyles(); this.safe('rain', () => this.updateRain(dt));
     this.safe('heads', () => this.slideOffHeads());
     this.safe('combat', () => this.updateCombat(dt, cmd)); this.safe('emitters', () => this.updateEmitters(dt)); this.sfx.updateAmbient(this.player.pos);
     this.input.consume('KeyE');
@@ -1426,7 +1447,7 @@ export class Game {
   updateCombat(dt, cmd) {
     const pl = this.player;
     const I = this.input;
-    if (I.consume('Digit1')) this.setWeapon('soaker'); if (I.consume('Digit2')) this.setWeapon('shotgun'); if (I.consume('Digit3')) this.setWeapon('candygun'); if (I.consume('Digit4')) this.setWeapon('turd');
+    if (I.consume('Digit1')) this.setWeapon(this.weapon === 'cutter' && this.hasSoaker ? 'soaker' : 'cutter'); /* 1 = pizza cutter / soaker, like Doom's fist / chainsaw */ if (I.consume('Digit2')) this.setWeapon('shotgun'); if (I.consume('Digit3')) this.setWeapon('candygun'); if (I.consume('Digit4')) this.setWeapon('turd');
     for (const k of W2_KEYS) if (I.consume('Digit' + W2[k].slot)) this.setWeapon(k);
     if (I.consume('KeyQ') || I.consume('WheelDown')) this.cycleWeapon(1); if (I.consume('WheelUp')) this.cycleWeapon(-1);
     this.aim.position.set(...pl.eye()); this.aim.rotation.set(pl.pitch, pl.yaw, 0, 'YXZ'); this.aim.updateMatrixWorld();
@@ -1444,6 +1465,7 @@ export class Game {
     else if (this.weapon === 'turd' && this.hasTurd) { this.turdgun.update(dt, cmd.fire, this.aim, pl); this.sfx.spray(false); this.sfx.spin(0); }
     else if (this.weapon === 'candygun' && this.hasCandy) { this.candygun.update(dt, cmd.fire, this.aim, pl); this.sfx.spray(false); }
     else if (this.weapon === 'shotgun' && this.hasShotgun) { this.shotgun.update(dt, cmd.fire, this.aim, pl); this.sfx.spray(false); this.sfx.spin(0); }
+    else if (this.weapon === 'cutter' || !this.hasSoaker) { this.cutter.update(dt, cmd.fire, this.aim, pl); this.sfx.spray(false); this.sfx.spin(0); }
     else if (this.hasSoaker) { this.soaker.update(dt, cmd.fire, this.aim, pl); this.sfx.spin(0); if (cmd.fire && this.ammo <= 0) this.autoSwitch(); }
     this.updateGoo(dt);
     for (const e of this.enemies) this.safe('enemy ' + (e.kind || ''), () => e.update(dt));
@@ -1503,7 +1525,7 @@ export class Game {
     // 3D world at low res
     if (this.particles) { const k = this.rt.height / Math.max(1, R.getDrawingBufferSize(this._dbs || (this._dbs = new THREE.Vector2())).y); this.particles.points.material.size = 2.2 * k; this.dropFx.points.material.size = 5 * k; }
     R.setRenderTarget(this.rt); R.render(this.scene, cam);
-    if (!showBody && !this.playerDead && this.state !== 'intermission') { if (W2[this.weapon] && this.arsenal.has(this.weapon)) this.arsenal.render(this.weapon, R, cam); else if (this.weapon === 'turd' && this.hasTurd) this.turdgun.render(R, cam); else if (this.weapon === 'candygun' && this.hasCandy) this.candygun.render(R, cam); else if (this.weapon === 'shotgun' && this.hasShotgun) this.shotgun.render(R, cam); else if (this.hasSoaker) this.soaker.render(R, cam); }
+    if (!showBody && !this.playerDead && this.state !== 'intermission') { if (W2[this.weapon] && this.arsenal.has(this.weapon)) this.arsenal.render(this.weapon, R, cam); else if (this.weapon === 'turd' && this.hasTurd) this.turdgun.render(R, cam); else if (this.weapon === 'candygun' && this.hasCandy) this.candygun.render(R, cam); else if (this.weapon === 'shotgun' && this.hasShotgun) this.shotgun.render(R, cam); else if (this.weapon === 'cutter' || !this.hasSoaker) this.cutter.render(R, cam); else this.soaker.render(R, cam); }
     // portrait
     this.portrait.render(R);
     // post: FXAA on the rendered frame, then bloom from its bright parts
@@ -1526,8 +1548,8 @@ export class Game {
         U.time.value = this.shared.time.value; U.rainAmt.value = this.rain ? 1 : 0.15; } }
     const fl = this.flash; this.blitMat.uniforms.flash.value.set(...(fl ? fl.rgb : [0, 0, 0]), fl ? Math.max(0, fl.a) : 0);
     R.render(this.blitScene, this.blitCam);
-    this.hud.set({ boss: this.director && this.director.active ? Math.max(0.01, Math.ceil(this.director.boss.health / this.director.boss.maxHealth * 60) / 60) : 0, health: this.health, owned: this.arsenal.owned(), ammo: W2[this.weapon] ? this.arsenal.ammo(this.weapon) : this.weapon === 'turd' ? this.turds : this.weapon === 'candygun' ? this.candy : this.weapon === 'shotgun' ? this.sausages : this.ammo, weapon: this.hasWeapon(this.weapon) ? this.weapon : null, weapons: (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length, keys: this.keys, slices: this.slices, slicesTotal: this.slicesTotal, secrets: this.secrets, secretsTotal: this.secretsTotal, crosshair: !showBody && this.state === 'play' && !this.playerDead, visible: true });
-    const tw = (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length > 1; if (tw !== this._tw) { this._tw = tw; document.body.classList.toggle('twoweap', tw); }
+    this.hud.set({ boss: this.director && this.director.active ? Math.max(0.01, Math.ceil(this.director.boss.health / this.director.boss.maxHealth * 60) / 60) : 0, health: this.health, owned: this.arsenal.owned(), ammo: W2[this.weapon] ? this.arsenal.ammo(this.weapon) : this.weapon === 'turd' ? this.turds : this.weapon === 'candygun' ? this.candy : this.weapon === 'shotgun' ? this.sausages : this.ammo, weapon: this.hasWeapon(this.weapon) ? this.weapon : null, weapons: 1 + (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length, keys: this.keys, slices: this.slices, slicesTotal: this.slicesTotal, secrets: this.secrets, secretsTotal: this.secretsTotal, crosshair: !showBody && this.state === 'play' && !this.playerDead, visible: true });
+    const tw = 1 + (this.hasSoaker ? 1 : 0) + (this.hasShotgun ? 1 : 0) + (this.hasCandy ? 1 : 0) + (this.hasTurd ? 1 : 0) + this.arsenal.owned().length > 1; if (tw !== this._tw) { this._tw = tw; document.body.classList.toggle('twoweap', tw); }
     this.hud.render(R, this.portrait.rt.texture);
   }
 }

@@ -157,6 +157,9 @@ export class Sfx {
       case 'candyHit': this.noise(0.08, 2600, 3, 0.1, 0, 'bandpass'); this.tone('triangle', 900, 1400, 0.05, 0.04); break;
       case 'squelch': this.noise(0.18, 700, 3, 0.3, 0, 'lowpass', 200); this.tone('sine', 180, 60, 0.15, 0.12); break;
       case 'thud': this.noise(0.1, 400, 1, 0.15); break;
+      case 'cutSwing': this.noise(0.16, 900, 1.5, 0.22, 0, 'bandpass', 2600); this.noise(0.1, 5000, 3, 0.05, 0.03, 'highpass'); break;
+      case 'cutHit': this.noise(0.18, 700, 3, 0.32, 0, 'lowpass', 200); this.tone('sine', 200, 70, 0.14, 0.14); this.tone('triangle', 2400, 1800, 0.12, 0.05); break;
+      case 'cutWall': this.tone('triangle', 2900 + Math.random() * 400, 2200, 0.16, 0.1); this.tone('square', 1400, 0, 0.03, 0.05); this.noise(0.06, 3000, 2, 0.1, 0, 'bandpass'); break;
       // ---- the Q3-style snack arsenal ----
       case 'colaLaunch': this.tone('sine', 140, 60, 0.18, 0.4); this.noise(0.2, 600, 1, 0.4, 0, 'lowpass', 200); this.noise(0.35, 3500, 1, 0.12, 0.05, 'highpass'); this.tone('square', 900, 0, 0.03, 0.06, 0.12); break;
       case 'colaBounce': this.tone('triangle', 1300 + Math.random() * 300, 800, 0.08, 0.12); this.tone('square', 2400, 0, 0.02, 0.04); break;

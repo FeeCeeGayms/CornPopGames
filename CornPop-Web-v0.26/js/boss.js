@@ -382,7 +382,7 @@ export class Bcm {
 export class BossDirector {
   constructor(game) {
     this.game = game; this.boss = null; this.lairs = []; this.cool = 0;
-    const { ep, mi } = game; if (!game.bcmAsset || (ep === 0 && mi === 0)) return; // no boss on the very first map
+    const { ep, mi } = game; if (!game.bcmAsset || (ep !== 1 && mi === 0)) return; // no boss on the first map of Episodes 1 and 3
     let arenas = findArenas(game.world); const st = game.ents.find(e => e.type === 'start').pos;
     arenas = arenas.filter(a => !a.cells.has(cellOf(a, st[0], st[2])) && Math.hypot(a.center[0] - st[0], a.center[2] - st[2]) > 700);
     for (let i = arenas.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arenas[i], arenas[j]] = [arenas[j], arenas[i]]; }
