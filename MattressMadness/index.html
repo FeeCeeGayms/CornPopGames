@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#241a52">
+<title>Mattress Madness</title>
+<link href="https://fonts.googleapis.com/css2?family=Chango&family=Figtree:wght@500;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#241a52;--corn:#ffd23f;--pink:#ff8fb1;--paper:#fff8e6;--glass:rgba(255,248,230,.82)}
+html,body{height:100%;margin:0;background:#120c2e;overflow:hidden;font-family:Figtree,system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+#hud{position:fixed;left:calc(env(safe-area-inset-left,0px) + 14px);right:calc(env(safe-area-inset-right,0px) + 14px);top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none}
+#cnt{display:flex;align-items:center;gap:10px;background:var(--glass);-webkit-backdrop-filter:blur(10px) saturate(1.4);backdrop-filter:blur(10px) saturate(1.4);border:2px solid rgba(36,26,82,.9);border-radius:16px;padding:5px 16px 5px 9px;box-shadow:0 4px 0 var(--ink),0 10px 30px rgba(10,5,40,.35);font-family:Chango,Impact,sans-serif;font-size:26px;color:var(--ink);transition:transform .15s}
+#cnt.pop{transform:scale(1.14)}
+#cnt i{width:38px;height:20px;border-radius:6px;background:linear-gradient(180deg,#ffb3cb,#ff7aa3);border:2px solid var(--ink);display:block;box-shadow:inset 0 2px 0 rgba(255,255,255,.6)}
+#pbtn,#mute{pointer-events:auto;font-size:18px;width:46px;height:46px;border-radius:50%;border:2px solid var(--ink);background:var(--glass);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:0 4px 0 var(--ink),0 8px 22px rgba(10,5,40,.3);cursor:pointer;color:var(--ink)}
+#toast{position:fixed;left:0;right:0;top:20%;text-align:center;font-family:Chango,Impact,sans-serif;font-size:clamp(24px,4.6vw,50px);color:var(--corn);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 5px 0 var(--ink),0 0 30px rgba(255,190,60,.55);opacity:0;transform:translateY(10px) scale(.96);transition:opacity .35s,transform .35s cubic-bezier(.2,1.5,.4,1);pointer-events:none;padding:0 12px}
+#toast.on{opacity:1;transform:none}
+#big{position:fixed;left:0;right:0;top:28%;text-align:center;font-family:Chango,Impact,sans-serif;font-size:clamp(70px,16vw,170px);color:var(--corn);-webkit-text-stroke:3px var(--ink);paint-order:stroke fill;text-shadow:0 8px 0 var(--ink),0 0 50px rgba(255,200,80,.6);pointer-events:none;display:none}
+#ctl{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:none;justify-content:space-between;padding:0 calc(env(safe-area-inset-right,0px) + 16px) 0 calc(env(safe-area-inset-left,0px) + 16px);pointer-events:none}
+#ctl div{display:flex;gap:12px}
+#ctl button{pointer-events:auto;width:72px;height:72px;border-radius:50%;border:3px solid var(--ink);background:var(--glass);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 5px 0 var(--ink);font-size:28px;color:var(--ink);touch-action:none}
+#ctl button:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(36,26,82,.25),rgba(18,12,46,.7));padding:16px}
+.ov>div{background:linear-gradient(180deg,rgba(255,250,236,.94),rgba(255,243,214,.94));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);color:var(--ink);border:3px solid var(--ink);border-radius:24px;box-shadow:0 8px 0 var(--ink),0 30px 60px rgba(10,5,40,.45);padding:22px 26px;max-width:480px;text-align:center;animation:cardIn .45s cubic-bezier(.2,1.4,.4,1)}
+@keyframes cardIn{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:none}}
+.ov h1{font-family:Chango,Impact,sans-serif;font-weight:400;font-size:clamp(34px,8vw,54px);line-height:1;margin:0 0 10px;transform:rotate(-2deg);color:var(--ink)}
+.ov h2{font-family:Chango,Impact,sans-serif;font-weight:400;font-size:28px;margin:0 0 6px}
+.ov p{margin:8px 0;font-weight:500;line-height:1.4}
+.ov .st{font-size:38px;letter-spacing:6px;color:#ffb800;-webkit-text-stroke:1.5px var(--ink);text-shadow:0 0 18px rgba(255,190,0,.6)}
+.ov button{font:inherit;font-weight:800;font-size:20px;margin-top:12px;padding:12px 28px;border-radius:14px;border:3px solid var(--ink);background:linear-gradient(180deg,#ffe066,#ffc21a);color:var(--ink);box-shadow:0 5px 0 var(--ink),inset 0 2px 0 rgba(255,255,255,.7);cursor:pointer}
+.ov button:disabled{opacity:.75}
+.ov button.foc,.ov button:focus-visible{outline:4px solid #ff8fb1;outline-offset:3px}
+.ov button:active{transform:translateY(4px);box-shadow:0 1px 0 var(--ink)}
+.ov kbd{background:#fff;color:var(--ink);text-shadow:none;border:2px solid var(--ink);border-radius:6px;padding:0 6px;font-family:inherit;font-weight:800}
+#hbtn{display:flex;gap:10px}
+#fade{position:fixed;inset:0;background:radial-gradient(circle,#6a0000,#000);opacity:0;pointer-events:none;transition:opacity .8s;z-index:3}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:4}
+#hud,#toast,#big,#ctl{z-index:5}.ov{z-index:6}#pause{display:none;z-index:7}
+.ov.t{align-items:flex-end;background-color:#0b1d3a;background-size:cover;background-position:center;padding:0}
+.ov.t>div{background:none;border:0;box-shadow:none;padding:0 0 calc(3vh + env(safe-area-inset-bottom,0px));max-width:none;color:#fff;-webkit-backdrop-filter:none;backdrop-filter:none;animation:none}
+.ov.t{background-repeat:no-repeat}@media (orientation:portrait){.ov.t{background-size:contain;background-position:center 28%}}
+.ov.t p{margin:8px 0 0;font-weight:800;text-shadow:0 2px 6px #000,0 0 12px #000}
+.ov.t button{font-size:clamp(18px,3.4vw,30px);padding:10px 48px;animation:pulse 1.6s ease-in-out infinite}
+.ov.t button:disabled{animation:none}
+@keyframes pulse{50%{transform:scale(1.06);box-shadow:0 5px 0 var(--ink),0 0 30px rgba(255,210,63,.8)}}
+#bar{width:min(320px,70vw);height:10px;margin:10px auto 0;border-radius:6px;background:rgba(0,0,0,.45);border:2px solid #fff;overflow:hidden}
+#bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd23f,#ff8fb1);transition:width .2s}
+.ov .vb{font-size:16px;padding:6px 20px;margin-top:4px;box-shadow:0 3px 0 var(--ink)}.ov .vb.sel{background:linear-gradient(180deg,#ffb3cb,#ff8fb1)}
+.ov input[type=range]{width:230px;accent-color:#ff8fb1}
+.splat{position:fixed;width:min(52vw,80vh);aspect-ratio:1;transform:translate(-50%,-50%) scale(0);z-index:4;pointer-events:none}
+.splat svg{width:100%;height:100%;overflow:visible;filter:drop-shadow(0 6px 10px rgba(60,0,0,.35))}
+@media (max-height:520px){#ctl button{width:60px;height:60px;font-size:24px}#cnt{font-size:20px}#cnt i{width:30px;height:16px}.ov>div{padding:12px 18px}.ov h2{font-size:22px}.ov p{margin:4px 0;font-size:14px}.ov .st{font-size:26px}.ov button{padding:8px 22px;font-size:16px;margin-top:6px}#toast{top:16%}}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="hud"><div id="cnt"><i></i><span id="n">0</span></div><div id="hbtn"><button id="pbtn" aria-label="Pause">&#10074;&#10074;</button><button id="mute" aria-label="Toggle sound">&#9835;</button></div></div>
+<div id="toast"></div><div id="big"></div>
+<div id="ctl"><div><button data-k="l" aria-label="Left">&#9664;</button><button data-k="r" aria-label="Right">&#9654;</button></div><div><button data-k="p" aria-label="Punch">&#128074;</button><button data-k="j" aria-label="Jump">&#9650;</button></div></div>
+<div id="fade"></div><div id="flash"></div><div id="card" class="ov"></div><div id="pause" class="ov"></div>
+<!--LIBS-->
+<script src="lib/three.min.js"></script>
+<script src="lib/GLTFLoader.js"></script>
+<script src="lib/SkeletonUtils.js"></script>
+<script src="lib/CopyShader.js"></script>
+<script src="lib/LuminosityHighPassShader.js"></script>
+<script src="lib/EffectComposer.js"></script>
+<script src="lib/RenderPass.js"></script>
+<script src="lib/ShaderPass.js"></script>
+<script src="lib/UnrealBloomPass.js"></script>
+<!--/LIBS-->
+<!--EMBED-->
+<script src="src/game.js"></script>
+</body></html>

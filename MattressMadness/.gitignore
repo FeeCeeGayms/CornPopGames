@@ -1,0 +1,10 @@
+# build output
+dist/
+_site/
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
