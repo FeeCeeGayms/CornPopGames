@@ -379,7 +379,7 @@ export class Arsenal {
     const g = this.game, [k, what] = ITEM_TO_W[e.type], D = W2[k], s = this.inv[k], c = new THREE.Color(D.pip);
     if (what === 'gun') {
       const had = s.has; s.has = true; s.ammo = Math.min(D.max, s.ammo + D.pickup); g.setWeapon(k, true);
-      g.message(had ? `More ${D.label.toLowerCase()} for the ${D.name.toLowerCase()}!` : D.msg); g.sfx.play('weapon'); g.bonusFlash([c.r, c.g, c.b], 0.4); g.emote('funky');
+      g.message(had ? `More ${D.label.toLowerCase()} for the ${D.name.toLowerCase()}!` : D.msg); g.sfx.play('weapon'); g.faceReact('evil', 2.6); g.bonusFlash([c.r, c.g, c.b], 0.4); g.emote('funky');
       return true;
     }
     if (s.ammo >= D.max) return false;

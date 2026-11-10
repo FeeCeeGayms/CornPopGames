@@ -32,6 +32,14 @@ export const BEANS = { health: 50, speed: 225, sight: 1500, attackRange: 900, he
 export const FRENTA_ANIMS = { idle: 'Idle_02', walk: 'Idle_02', run: 'Run_02', attack: 'Idle_02', death: 'Shot_and_Fall_Backward', pain: 'BeHit_FlyUp', taunt: 'Idle_02' };
 export const FRENTA = { health: 55, speed: 175, sight: 1800, attackRange: 1200, height: 74, modelH: 2.83, fly: true, hover: 80, keepDist: 330,
   fireSpeed: 250, fireDamage: 10, fireCd: [2.2, 3.4], painScale: 1.6, deathScale: 1.1, deathHold: 99, explodeAt: 2.3, pile: 'ecto', sfx: 'frenta', opacity: 0.58 };
+// Boojo: a harmless bystander who turns up at random spots in every map. He just stands around until fighting starts nearby,
+// then runs around flailing his arms in a panic. He has no attack; kill him and he bursts into tacos. Ballinkis go after him.
+export const BOOJO_ANIMS = { idle: 'Idle_02', walk: 'Walking', run: 'Running', attack: 'Idle_02', death: 'Idle_02', pain: 'Running', taunt: 'Idle_02' };
+export const BOOJO = { health: 30, speed: 215, sight: 1200, attackRange: 0, height: 60, modelH: 1.87, attackScale: 1, release: 99, attackEnd: 99, painScale: 1.4, deathScale: 1, deathHold: 0,
+  explodeAt: 0, pile: 'tacos', sfx: 'boojo', panicRange: 900, noiseRange: 1100 };
+// friendly fire (Doom-style infighting): enemy attacks that hit another enemy do this much more damage than they do to CornPop,
+// so the grudge match is over in a few hits instead of dragging on
+export const INFIGHT = { damage: 3, giveUp: 8, ballinkiBoojoRange: 650, fartHit: 14 };
 // turd launcher: a rocket launcher for poo; splash damage and a coat of brown goo that slows enemies down
 export const TURD = { cooldown: 0.85, speed: 880, gravity: 140, damage: 95, splash: 135, selfScale: 0.35, maxAmmo: 30, pickupAmmo: 8, boxAmmo: 4, gooTime: 3.5, slow: 0.45, knock: 420 };
 // double-barrel sausage shotgun: two sausages per shot, hits hardest up close
@@ -72,6 +80,16 @@ export function makePotato(s = 1) {
   const g = new THREE.Group(); g.add(new THREE.Mesh(geo, skin));
   for (let i = 0; i < 4; i++) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.7 * s, 4, 3), eye); const a = Math.random() * 6.3, b = (Math.random() - 0.5) * 2; e.position.set(Math.cos(a) * 5.2 * s * Math.cos(b * 0.6), Math.sin(b) * 3 * s, Math.sin(a) * 3.8 * s * Math.cos(b * 0.6)); g.add(e); }
   g.userData.mats = [skin, eye]; g.userData.r = 3.8 * s; return g;
+}
+// a taco: a folded tortilla shell with mince, lettuce, tomato and cheese (Boojo's death debris)
+export function makeTaco(s = 1) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshBasicMaterial({ color: 0xe8b24a, side: THREE.DoubleSide }), meat = new THREE.MeshBasicMaterial({ color: 0x6a3a1e }), lettuce = new THREE.MeshBasicMaterial({ color: 0x5cc23a }), tomato = new THREE.MeshBasicMaterial({ color: 0xd8301c }), cheese = new THREE.MeshBasicMaterial({ color: 0xffd23a });
+  const sh = new THREE.Mesh(new THREE.CylinderGeometry(5.5 * s, 5.5 * s, 3.2 * s, 14, 1, true, 0, Math.PI), shell); sh.rotation.set(Math.PI / 2, 0, Math.PI / 2); g.add(sh); // a half-pipe, opening up
+  const fill = new THREE.Mesh(new THREE.BoxGeometry(2.6 * s, 2.2 * s, 9.5 * s), meat); fill.position.y = 1.4 * s; g.add(fill);
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.4 * s, 1 * s, 1.4 * s), i % 3 === 0 ? tomato : i % 3 === 1 ? lettuce : cheese); m.position.set((Math.random() - 0.5) * 2 * s, 2.6 * s, (Math.random() - 0.5) * 8 * s); m.rotation.y = Math.random() * 3; g.add(m); }
+  const l = new THREE.Mesh(new THREE.PlaneGeometry(3.4 * s, 9 * s), lettuce); l.material.side = THREE.DoubleSide; l.rotation.x = -Math.PI / 2; l.position.y = 2.9 * s; g.add(l);
+  g.userData.mats = [shell, meat, lettuce, tomato, cheese]; g.userData.r = 3 * s; return g;
 }
 // ---------------------------------------------------------------- dirty tissue (Marv's projectile)
 export function makeTissue() {
@@ -305,24 +323,38 @@ function segAabb(p0, p1, mn, mx) {
   return t0;
 }
 
+// rotate `bone` so the direction bone -> child points along world direction `dir` (used for Boojo's flailing arms)
+const _av1 = new THREE.Vector3(), _av2 = new THREE.Vector3(), _aq1 = new THREE.Quaternion(), _aq2 = new THREE.Quaternion(), _aq3 = new THREE.Quaternion();
+function aimBone(bone, child, dir, w) {
+  bone.updateMatrixWorld(true); const a = _av1.setFromMatrixPosition(bone.matrixWorld), b = _av2.setFromMatrixPosition(child.matrixWorld); const cur = b.sub(a).normalize();
+  _aq1.setFromUnitVectors(cur, dir); bone.getWorldQuaternion(_aq2); _aq3.copy(_aq1).multiply(_aq2);
+  bone.parent.getWorldQuaternion(_aq2); _aq2.invert().multiply(_aq3); bone.quaternion.slerp(_aq2, w); bone.updateMatrixWorld(true);
+}
 // ---------------------------------------------------------------- Qoq
 let QID = 0;
 export class Qoq {
   constructor(game, def) {
     this.game = game; this.id = QID++;
-    this.kind = ['marv', 'ballinki', 'frenta', 'beans'].includes(def.type) ? def.type : 'qoq'; const K = this.K = { qoq: QOQ, marv: MARV, ballinki: BALLINKI, frenta: FRENTA, beans: BEANS }[this.kind];
+    this.kind = ['marv', 'ballinki', 'frenta', 'beans', 'boojo'].includes(def.type) ? def.type : 'qoq'; const K = this.K = { qoq: QOQ, marv: MARV, ballinki: BALLINKI, frenta: FRENTA, beans: BEANS, boojo: BOOJO }[this.kind];
+    this.boojo = this.kind === 'boojo'; this.foe = null; this.foeLostT = 0;
     this.phys = new MonsterMove(game.world); this.phys.maxspeed = K.speed; if (K.jumpVel) this.phys.jumpVel = K.jumpVel;
     let lift = 0; if (K.fly) { const cl = game.world.cell(Math.floor(def.pos[0] / 32), Math.floor(def.pos[2] / 32)); lift = cl.solid ? 0 : Math.max(0, Math.min(56, cl.c - def.pos[1] - 24.1 - 34)); }
     this.phys.spawn([def.pos[0], def.pos[1] + 24.1 + lift, def.pos[2]], def.angle || 0);
     this.health = K.health; this.state = 'idle'; this.awake = false; this.alive = true;
     this.attackCd = 0.6 + Math.random(); this.sightT = Math.random() * 0.2; this.flashT = 0; this.acidT = 0; this.stuckT = 0; this.dodgeT = 0; this.trailIdx = -1;
-    this.model = ({ marv: game.marvAsset, ballinki: game.ballinkiAsset, frenta: game.frentaAsset, beans: game.beansAsset }[this.kind] || game.qoqAsset).instance(); this.model.root.scale.setScalar(K.height / K.modelH);
+    this.model = ({ marv: game.marvAsset, ballinki: game.ballinkiAsset, frenta: game.frentaAsset, beans: game.beansAsset, boojo: game.boojoAsset }[this.kind] || game.qoqAsset).instance(); this.model.root.scale.setScalar(K.height / K.modelH);
     for (const m of this.model.mats) { m.emissiveMap = m.map; m.emissive = new THREE.Color(0, 0, 0); if (K.fly) { m.transparent = true; m.opacity = K.opacity; m.depthWrite = false; } }
     if (K.fly) { // green ghost glow that follows him around
       this.glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: game.glowTex(), color: 0x50ff60, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: true }));
       this.glow.scale.set(150, 170, 1); game.scene.add(this.glow); this.flyVel = [0, 0, 0]; this.fireCd = 1 + Math.random() * 2; this.bobPh = Math.random() * 6;
     }
     this.model.setState('idle', 0, true);
+    if (this.boojo) { // arm bones for the panic flail, and a random pose phase so a crowd of Boojos doesn't move in lockstep
+      const B = {}; this.model.root.traverse(o => { if (o.isBone) B[o.name] = o; });
+      this.arms = [['Left', -1], ['Right', 1]].map(([s, side]) => ({ up: B[s + 'UpperArm'], lo: B[s + 'LowerArm'], hand: B[s + 'Hand'], side })).filter(a => a.up && a.lo && a.hand);
+      this.flailPh = Math.random() * 6; this.panicT = 0; this.yelpT = 1 + Math.random() * 2; this.idleTurnT = 2 + Math.random() * 4; this.idleYaw = def.angle || 0;
+      for (const k of ['idle', 'run', 'walk']) { const a = this.model.actions[k]; if (a) a.time = Math.random() * a.getClip().duration; }
+    }
     this.model.root.traverse(o => { if (o.isMesh) { o.frustumCulled = true; o.geometry.computeBoundingSphere(); o.geometry.boundingSphere.radius *= 1.4; } });
     game.scene.add(this.model.root);
     this.brush = { min: [0, 0, 0], max: [0, 0, 0], solid: true, shadow: false, enemy: this };
@@ -344,13 +376,27 @@ export class Qoq {
   canSee(p) { const g = this.game; return g.world.trace(this.eye(), p, [-1, -1, -1], [1, 1, 1], null, true).fraction >= 0.999; }
   wake(sound = true) {
     if (this.awake || !this.alive) return; this.awake = true; this.state = 'chase';
+    if (this.boojo) { this.panicT = 0; if (sound) this.game.sfx.play('boojoSight'); return; } // panic! (Boojo never alerts anyone)
     if (sound) this.game.sfx.play(this.K.sfx + 'Sight');
     // group alert, like Quake monsters
     for (const o of this.game.enemies) if (o !== this && o.alive && !o.awake && Math.hypot(o.pos[0] - this.pos[0], o.pos[2] - this.pos[2]) < 420 && this.canSee(o.eye())) o.wake(false);
   }
-  hurt(n, acid) {
+  // the current infighting target, if it is still worth fighting
+  foeOf() { const f = this.foe; if (f && (!f.alive || f.dormant || f.exploded)) { this.foe = null; if (this.foeOnly) { this.foeOnly = false; this.awake = false; this.state = 'idle'; this.model.emote = null; this.model.setState('idle', 0.3, true); } } return this.foe; }
+  // friendly fire: hit by another monster's attack -> drop CornPop and fight that monster until one of them is dead (Doom infighting)
+  grudge(attacker) {
+    if (!(attacker instanceof Qoq) || attacker === this || !attacker.alive || attacker.boojo || this.boojo) return;
+    if (this.foe === attacker) return;
+    if (this.foe && this.foe.alive && !this.foe.boojo) return; // already settling another score
+    this.foe = attacker; this.foeLostT = 0; this.foeOnly = false;
+    if (!this.awake) { this.awake = true; this.state = 'chase'; } this.sightT = 0;
+    if (this.state === 'attack' || this.state === 'taunt') { this.state = 'chase'; this.model.emote = null; this.model.setState('run', 0.15, true); this.attackCd = Math.min(this.attackCd, 0.4); }
+    this.game.sfx.play(this.K.sfx + 'Sight');
+  }
+  hurt(n, acid, attacker) {
     if (!this.alive) return;
     this.health -= n; this.flashT = 0.12; this.wake();
+    if (attacker) this.grudge(attacker);
     if (acid) this.acidT = SOAKER.acidTime;
     if (this.health <= 0) this.die();
     else if (Math.random() < 0.08 && this.state !== 'attack' && this.state !== 'pain') { this.state = 'pain'; this.stateT = 0; this.model.playEmote('pain'); this.model.actions.pain.timeScale = this.K.painScale; this.game.sfx.play(this.K.sfx + 'Pain'); }
@@ -360,7 +406,9 @@ export class Qoq {
     this.game.world.removeBrush(this.brush);
     const a = this.model.actions.death; this.model.mixer.stopAllAction(); this.model.emote = null;
     a.reset(); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.timeScale = this.K.deathScale; a.play();
-    this.game.sfx.play(this.K.sfx + 'Death'); this.game.kills++;
+    this.game.sfx.play(this.K.sfx + 'Death');
+    if (this.boojo) return; // not an enemy: no kill, no drops (he bursts into tacos in updateBoojo)
+    this.game.kills++;
     const fy = this.K.fly ? this.game.world.floorAt(this.pos[0], this.pos[2]) : this.pos[1] - 24;
     this.game.dropPickup('juice', [this.pos[0], fy, this.pos[2]], 30);
     if (this.game.hasCandy && Math.random() < 0.4) this.game.dropPickup('candybag', [this.pos[0] - 12, fy, this.pos[2] - 6], 15);
@@ -368,8 +416,9 @@ export class Qoq {
     if (this.game.arsenal) this.game.arsenal.enemyDrop([this.pos[0] + 8, fy, this.pos[2] + 12]);
     if (this.kind === 'marv') this.game.dropPickup('sausages', [this.pos[0] + 14, fy, this.pos[2] + 8], 8);
   }
-  fart() { // a green cloud just behind him, big enough to swallow CornPop standing in front
-    const f = [-Math.sin(this.phys.yaw), -Math.cos(this.phys.yaw)];
+  fart() { // a green cloud just in front of him, big enough to swallow CornPop standing there
+    const f = [-Math.sin(this.phys.yaw), -Math.cos(this.phys.yaw)], foe = this.foeOf();
+    if (foe && Math.hypot(foe.pos[0] - this.pos[0], foe.pos[2] - this.pos[2]) < 150) { this.game.spawnFart([foe.pos[0], foe.pos[1] - 4, foe.pos[2]], this); return; } // right on top of his victim
     this.game.spawnFart([this.pos[0] + f[0] * 25, this.pos[1] - 4, this.pos[2] + f[1] * 25], this);
   }
   // ---- Frenta: flying ghost movement, fireballs, falling death ----
@@ -392,26 +441,28 @@ export class Qoq {
     let ceil = cell.solid ? p[1] + 60 : cell.c; const fv = this.flyVel, sp = Math.hypot(fv[0], fv[2]) || 1;
     for (const dd of [24, 48]) { const ah = W.cell(Math.floor((p[0] + fv[0] / sp * dd) / 32), Math.floor((p[2] + fv[2] / sp * dd) / 32)); if (!ah.solid) ceil = Math.min(ceil, ah.c); }
     if (this.alive) {
-      const toP = [pl.pos[0] - p[0], pl.pos[2] - p[2]]; const dist = Math.hypot(toP[0], toP[1]);
+      const foe = this.foeOf(), tp = foe ? foe.pos : pl.pos;
+      const toP = [tp[0] - p[0], tp[2] - p[2]]; const dist = Math.hypot(toP[0], toP[1]);
       this.sightT -= dt;
-      if (this.sightT <= 0) { this.sightT = 0.2; this.sees = !g.playerDead && dist < K.sight && this.canSee(pl.eye()); if (!this.awake && (this.sees || (g.noiseT > 0 && dist < 650))) this.wake(); }
+      if (this.sightT <= 0) { this.sightT = 0.2; this.sees = foe ? this.canSee(foe.eye()) : !g.playerDead && dist < K.sight && this.canSee(pl.eye()); if (!this.awake && (this.sees || (g.noiseT > 0 && dist < 650))) this.wake();
+        if (foe) { this.foeLostT = this.sees ? 0 : this.foeLostT + 0.2; if (this.foeLostT > INFIGHT.giveUp) this.foe = null; } }
       const slow = this.pooT > 0 ? TURD.slow : this.sauceT > 0 ? 0.55 : 1, v = this.flyVel, want = [0, 0, 0];
-      if (this.awake && !g.playerDead) {
-        let tgt = pl.pos; if (!this.sees && this.trailIdx >= 0 && g.trail[this.trailIdx]) tgt = g.trail[this.trailIdx];
-        if (this.sees) this.trailIdx = g.trail.length - 1; else if (this.trailIdx >= 0) { const t = g.trail[this.trailIdx]; if (t && Math.hypot(t[0] - p[0], t[2] - p[2]) < 60 && this.trailIdx < g.trail.length - 1) this.trailIdx++; }
+      if (this.awake && (foe || !g.playerDead)) {
+        let tgt = tp; if (!foe && !this.sees && this.trailIdx >= 0 && g.trail[this.trailIdx]) tgt = g.trail[this.trailIdx];
+        if (foe) { /* straight at the foe */ } else if (this.sees) this.trailIdx = g.trail.length - 1; else if (this.trailIdx >= 0) { const t = g.trail[this.trailIdx]; if (t && Math.hypot(t[0] - p[0], t[2] - p[2]) < 60 && this.trailIdx < g.trail.length - 1) this.trailIdx++; }
         const dx = tgt[0] - p[0], dz = tgt[2] - p[2], d = Math.hypot(dx, dz) || 1, ux = dx / d, uz = dz / d;
         const radial = this.sees ? (d > K.keepDist + 60 ? 1 : d < K.keepDist - 80 ? -0.8 : 0) : 1;
         const orbit = this.sees ? Math.sin(g.time * 0.6 + this.bobPh) * 0.9 : 0;
         want[0] = (ux * radial - uz * orbit) * K.speed * slow; want[2] = (uz * radial + ux * orbit) * K.speed * slow;
         const hy = Math.min(ceil - 36, Math.max(floor + 60, tgt[1] + K.hover)) + Math.sin(g.time * 1.8 + this.bobPh) * 10;
         want[1] = Math.max(-140, Math.min(140, (hy - p[1]) * 2.2));
-        this.faceTowards(pl.pos, dt, 5);
+        this.faceTowards(tp, dt, 5);
         // spit a slow fireball
         this.fireCd -= dt;
         if (this.sees && dist < K.attackRange && this.fireCd <= 0 && this.state !== 'pain') {
           this.fireCd = K.fireCd[0] + Math.random() * (K.fireCd[1] - K.fireCd[0]);
           const f = [-Math.sin(this.phys.yaw), -Math.cos(this.phys.yaw)], from = [p[0] + f[0] * 22, p[1] + 30, p[2] + f[1] * 22];
-          const e = pl.eye(), tx = e[0] - from[0], ty = e[1] - 6 - from[1], tz = e[2] - from[2], l = Math.hypot(tx, ty, tz) || 1;
+          const e = foe ? foe.eye() : pl.eye(), tx = e[0] - from[0], ty = e[1] - 6 - from[1], tz = e[2] - from[2], l = Math.hypot(tx, ty, tz) || 1;
           g.spawnFireball(from, [tx / l * K.fireSpeed, ty / l * K.fireSpeed, tz / l * K.fireSpeed], this); g.sfx.play('fireSpit');
           M.playEmote('pain', 0.1); M.actions.pain.timeScale = 2.5; this.emoteT = 0.35;
         }
@@ -438,8 +489,9 @@ export class Qoq {
     if (this.flashT > 0) { r += 0.8; gg += 0.6; b += 0.4; }
     for (const m of M.mats) m.emissive.setRGB(r, gg, b);
   }
+  aimAt() { const f = this.foeOf(); if (f) return { pos: f.pos, vel: f.phys.vel, eye: f.eye() }; const pl = this.game.player; return { pos: pl.pos, vel: pl.vel, eye: pl.eye() }; }
   throwPotato() {
-    const g = this.game, pl = g.player; const from = [this.pos[0], this.pos[1] + 14, this.pos[2]];
+    const g = this.game, pl = this.aimAt(); const from = [this.pos[0], this.pos[1] + 14, this.pos[2]];
     const target = [pl.pos[0] + pl.vel[0] * 0.25, pl.pos[1] + 8, pl.pos[2] + pl.vel[2] * 0.25];
     const dx = target[0] - from[0], dy = target[1] - from[1], dz = target[2] - from[2]; const dh = Math.hypot(dx, dz);
     const T = Math.max(0.25, dh / BEANS.potatoSpeed);
@@ -447,7 +499,7 @@ export class Qoq {
     g.spawnPotato(from, v, this); g.sfx.play('potatoThrow');
   }
   throwTissue() {
-    const g = this.game, pl = g.player; const from = [this.pos[0], this.pos[1] + 34, this.pos[2]];
+    const g = this.game, pl = this.aimAt(); const from = [this.pos[0], this.pos[1] + 34, this.pos[2]];
     const target = [pl.pos[0] + pl.vel[0] * 0.3, pl.pos[1] + 10, pl.pos[2] + pl.vel[2] * 0.3];
     const dx = target[0] - from[0], dy = target[1] - from[1], dz = target[2] - from[2]; const dh = Math.hypot(dx, dz);
     const T = Math.max(0.25, dh / MARV.tissueSpeed);
@@ -455,7 +507,7 @@ export class Qoq {
     g.spawnTissue(from, v, this); g.sfx.play('sneeze');
   }
   throwChicken() {
-    const g = this.game, pl = g.player; const from = [this.pos[0] + Math.sin(-this.phys.yaw) * 0 , this.pos[1] + 30, this.pos[2]];
+    const g = this.game, pl = this.aimAt(); const from = [this.pos[0] + Math.sin(-this.phys.yaw) * 0 , this.pos[1] + 30, this.pos[2]];
     const target = [pl.pos[0] + pl.vel[0] * 0.25, pl.pos[1] + 8, pl.pos[2] + pl.vel[2] * 0.25];
     const dx = target[0] - from[0], dy = target[1] - from[1], dz = target[2] - from[2]; const dh = Math.hypot(dx, dz);
     const T = Math.max(0.25, dh / QOQ.chickenSpeed);
@@ -468,6 +520,65 @@ export class Qoq {
     const want = Math.atan2(-(p[0] - this.pos[0]), -(p[2] - this.pos[2]));
     let d = want - this.phys.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
     this.phys.yaw += Math.max(-rate * dt, Math.min(rate * dt, d)); return Math.abs(d);
+  }
+  // ---- Boojo: idles until fighting starts nearby, then runs around in a panic, flailing his arms ----
+  updateBoojo(dt, far) {
+    const g = this.game, pl = g.player, M = this.model, K = this.K;
+    if (!this.alive) { this.exploded = true; M.root.visible = false; g.deathPile(this); return; } // pop! tacos everywhere
+    const cmd = { forward: 0, side: 0, jump: false, walk: false };
+    this.sightT -= dt;
+    if (!this.awake && this.sightT <= 0) {
+      this.sightT = 0.3;
+      let fight = g.noiseT > 0 && Math.hypot(pl.pos[0] - this.pos[0], pl.pos[2] - this.pos[2]) < K.noiseRange;
+      if (!fight) for (const o of g.enemies) { if (o === this || o.boojo || !o.alive || o.dormant || !o.awake) continue; if (Math.hypot(o.pos[0] - this.pos[0], o.pos[2] - this.pos[2]) < K.panicRange) { fight = true; break; } }
+      if (!fight) for (const o of g.enemies) { if (o === this || !o.alive || o.dormant || o.foe !== this) continue; fight = true; break; } // something is coming for him
+      if (fight) this.wake(far < 1400);
+    }
+    if (this.awake) {
+      // run! pick a heading mostly away from the nearest threat, and a new one every second or so or when he runs into something
+      this.panicT -= dt; const sp = Math.hypot(this.phys.vel[0], this.phys.vel[2]); this.blockedT = sp < 50 ? (this.blockedT || 0) + dt : 0;
+      if (this.panicT <= 0 || this.blockedT > 0.3) {
+        let th = pl.pos, td = g.playerDead ? 1e9 : Math.hypot(pl.pos[0] - this.pos[0], pl.pos[2] - this.pos[2]);
+        for (const o of g.enemies) { if (o === this || o.boojo || !o.alive || o.dormant || !o.awake) continue; const d = Math.hypot(o.pos[0] - this.pos[0], o.pos[2] - this.pos[2]); if (d < td) { td = d; th = o.pos; } }
+        const away = Math.atan2(-(this.pos[0] - th[0]), -(this.pos[2] - th[2]));
+        this.panicYaw = this.blockedT > 0.3 || Math.random() < 0.3 ? this.phys.yaw + Math.PI * (0.5 + Math.random()) * (Math.random() < 0.5 ? -1 : 1) : away + (Math.random() - 0.5) * 2.2;
+        this.panicT = 0.6 + Math.random() * 1.3; this.blockedT = 0;
+      }
+      let d = this.panicYaw - this.phys.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      this.phys.yaw += Math.max(-9 * dt, Math.min(9 * dt, d)); cmd.forward = Math.abs(d) < 1.6 ? 1 : 0.3;
+      this.yelpT -= dt; if (this.yelpT <= 0) { this.yelpT = 1.4 + Math.random() * 2.2; if (far < 900) g.sfx.play('boojoPanic'); }
+    } else if (!g.playerDead && Math.hypot(pl.pos[0] - this.pos[0], pl.pos[2] - this.pos[2]) < 64 && Math.abs(pl.pos[1] - this.pos[1]) < 40) { // CornPop bumps into him: shuffle out of the way
+      const away = Math.atan2(-(this.pos[0] - pl.pos[0]), -(this.pos[2] - pl.pos[2])); let d = away + 0.5 - this.phys.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2;
+      this.phys.yaw += Math.max(-6 * dt, Math.min(6 * dt, d)); cmd.forward = 0.45; this.idleYaw = this.phys.yaw;
+    } else { // just standing around, now and then looking about
+      this.idleTurnT -= dt; if (this.idleTurnT <= 0) { this.idleTurnT = 3 + Math.random() * 5; this.idleYaw = this.phys.yaw + (Math.random() - 0.5) * 2.4; }
+      let d = this.idleYaw - this.phys.yaw; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; this.phys.yaw += Math.max(-1.5 * dt, Math.min(1.5 * dt, d));
+    }
+    this.phys.maxspeed = K.speed * (this.pooT > 0 ? TURD.slow : this.sauceT > 0 ? 0.55 : 1);
+    const pb = g.playerBrush; pb && (pb.solid = true);
+    let left = dt; while (left > 0) { const s = Math.min(left, 1 / 60); this.phys.update(s, cmd); left -= s; }
+    if (pb) pb.solid = false;
+    this.phys.events.length = 0; this.syncBrush();
+    M.setState(this.awake ? 'run' : cmd.forward ? 'walk' : 'idle', 0.2); if (M.actions.run) M.actions.run.timeScale = this.awake ? 1.25 : 1;
+    M.root.position.set(this.pos[0], this.pos[1] - 24, this.pos[2]); M.root.rotation.y = this.phys.yaw + Math.PI;
+    if (this.inView) {
+      M.update(dt + (this.animSkip || 0)); this.animSkip = 0;
+      if (this.awake && this.arms && far < 1600) { // arms up over his head, waving wildly
+        M.root.updateMatrixWorld(true); const t = g.time * 15 + this.flailPh, y = this.phys.yaw, rx = Math.cos(y), rz = -Math.sin(y), fx = -Math.sin(y), fz = -Math.cos(y);
+        for (const a of this.arms) {
+          const ph = t + (a.side > 0 ? 0 : 1.9), sw = Math.sin(ph), sw2 = Math.sin(ph * 1.7 + 0.6), out = 0.55 + 0.35 * sw;
+          aimBone(a.up, a.lo, _av1.set(rx * a.side * out + fx * 0.35 * sw2, 1, rz * a.side * out + fz * 0.35 * sw2).normalize().clone(), 0.85);
+          aimBone(a.lo, a.hand, _av1.set(rx * a.side * (0.2 + 0.6 * Math.sin(ph * 1.3)) + fx * 0.4 * Math.cos(ph), 1, rz * a.side * (0.2 + 0.6 * Math.sin(ph * 1.3)) + fz * 0.4 * Math.cos(ph)).normalize().clone(), 0.85);
+        }
+      }
+    } else this.animSkip = Math.min(1, (this.animSkip || 0) + dt);
+    const L = g.pointLight([this.pos[0], this.pos[1] + 8, this.pos[2]]);
+    let r = L[0] * 0.4, gg = L[1] * 0.4, b = L[2] * 0.4; // his texture is pale: a bit less light than the others
+    if (this.acidT > 0) { const k = 0.35 + 0.25 * Math.sin(g.time * 18); r += k * 0.8; gg += k; b *= 0.6; }
+    if (this.pooT > 0) { r = r * 0.55 + 0.18; gg = gg * 0.38 + 0.08; b *= 0.2; }
+    if (this.sauceT > 0) { const k = 0.5 + 0.2 * Math.sin(g.time * 12); r = r * 0.6 + k; gg *= 0.3; b *= 0.25; }
+    if (this.flashT > 0) { r += 0.8; gg += 0.6; b += 0.2; }
+    for (const m of M.mats) m.emissive.setRGB(r, gg, b);
   }
   update(dt) {
     const g = this.game, pl = g.player, M = this.model;
@@ -496,33 +607,43 @@ export class Qoq {
     if (this.pooT > 0) { this.pooT -= dt; if (Math.random() < dt * 14) g.particles.spawn([this.pos[0] + (Math.random() - 0.5) * 26, this.pos[1] + Math.random() * 40 - 6, this.pos[2] + (Math.random() - 0.5) * 26], [0, -30, 0], [0.42, 0.24, 0.1], 0.6, 400); }
     if (this.sauceT > 0) { this.sauceT -= dt; if (Math.random() < dt * 18) g.particles.spawn([this.pos[0] + (Math.random() - 0.5) * 24, this.pos[1] + Math.random() * 40 - 6, this.pos[2] + (Math.random() - 0.5) * 24], [0, -20, 0], [0.75, 0.08, 0.04], 0.6, 450); }
     if (this.K.fly) return this.updateFly(dt, far);
+    if (this.boojo) return this.updateBoojo(dt, far);
     this.phys.maxspeed = this.K.speed * (this.pooT > 0 ? TURD.slow : this.sauceT > 0 ? 0.55 : 1);
     const cmd = { forward: 0, side: 0, jump: false, walk: false };
     if (this.alive) {
-      const toP = [pl.pos[0] - this.pos[0], pl.pos[2] - this.pos[2]]; const dist = Math.hypot(toP[0], toP[1]);
+      let foe = this.foeOf(); const tp = foe ? foe.pos : pl.pos;
+      const toP = [tp[0] - this.pos[0], tp[2] - this.pos[2]]; const dist = Math.hypot(toP[0], toP[1]);
       // sight
       this.sightT -= dt;
       if (this.sightT <= 0) {
         this.sightT = 0.2;
-        this.sees = !g.playerDead && dist < this.K.sight && this.canSee(pl.eye());
+        // Ballinkis go after any Boojo they spot nearby
+        if (this.kind === 'ballinki' && !foe) {
+          let best = null, bd = this.awake ? INFIGHT.ballinkiBoojoRange * 0.75 : INFIGHT.ballinkiBoojoRange;
+          for (const o of g.enemies) { if (!o.boojo || !o.alive || o.dormant) continue; const d = Math.hypot(o.pos[0] - this.pos[0], o.pos[1] - this.pos[1], o.pos[2] - this.pos[2]); if (d < bd && this.canSee(o.eye())) { bd = d; best = o; } }
+          if (best) { this.foe = foe = best; this.foeLostT = 0; this.foeOnly = !this.awake; if (!this.awake) { this.awake = true; this.state = 'chase'; this.model.setState('run', 0.2, true); } this.attackCd = Math.min(this.attackCd, 0.5); }
+        }
+        if (foe) { this.sees = Math.hypot(foe.pos[0] - this.pos[0], foe.pos[2] - this.pos[2]) < this.K.sight && this.canSee(foe.eye()); this.foeLostT = this.sees ? 0 : this.foeLostT + 0.2; if (this.foeLostT > INFIGHT.giveUp) { this.foe = null; this.sees = false; } }
+        else this.sees = !g.playerDead && dist < this.K.sight && this.canSee(pl.eye());
         if (!this.awake && this.sees) {
           const f = [-Math.sin(this.phys.yaw), -Math.cos(this.phys.yaw)]; const dotv = (f[0] * toP[0] + f[1] * toP[1]) / (dist || 1);
           if (dotv > -0.1 || dist < 220) this.wake();
         }
         if (!this.awake && g.noiseT > 0 && dist < 650 && (this.sees || dist < 300)) this.wake();
         // choose a chase target: the player if visible, else the newest point on the player's trail we can see
-        if (this.awake && !this.sees) {
+        if (this.awake && !this.sees && !this.foe) {
           let pick = -1; const trail = g.trail;
           for (let i = trail.length - 1; i >= Math.max(0, this.trailIdx); i--) if (this.canSee([trail[i][0], trail[i][1] + 22, trail[i][2]])) { pick = i; break; }
           if (pick >= 0) this.trailIdx = pick;
         }
       }
-      if (this.awake && !g.playerDead) {
+      foe = this.foe;
+      if (this.awake && (foe || !g.playerDead)) {
         if (this.state === 'chase') {
           this.attackCd -= dt;
-          let target = this.sees ? pl.pos : (this.trailIdx >= 0 && g.trail[this.trailIdx]) || pl.pos;
-          if (!this.sees && this.trailIdx >= 0) { const t = g.trail[this.trailIdx]; if (t && Math.hypot(t[0] - this.pos[0], t[2] - this.pos[2]) < 40 && this.trailIdx < g.trail.length - 1) this.trailIdx++; }
-          if (this.sees) this.trailIdx = g.trail.length - 1;
+          let target = foe ? foe.pos : this.sees ? pl.pos : (this.trailIdx >= 0 && g.trail[this.trailIdx]) || pl.pos;
+          if (!foe && !this.sees && this.trailIdx >= 0) { const t = g.trail[this.trailIdx]; if (t && Math.hypot(t[0] - this.pos[0], t[2] - this.pos[2]) < 40 && this.trailIdx < g.trail.length - 1) this.trailIdx++; }
+          if (this.sees && !foe) this.trailIdx = g.trail.length - 1;
           this.faceTowards(target, dt);
           const close = this.sees && dist < (this.K.closeDist || 150);
           if (this.turret) { /* stays on its perch */ }
@@ -536,7 +657,8 @@ export class Qoq {
           const sp = Math.hypot(this.phys.vel[0], this.phys.vel[2]); this.blockedT = cmd.forward > 0 && sp < 40 ? (this.blockedT || 0) + dt : 0;
           if (!this.turret && this.stuckT > 0.45) { const moved = Math.hypot(this.pos[0] - this.lastPos[0], this.pos[2] - this.lastPos[2]); if (moved < 12 && cmd.forward > 0) { this.dodgeT = 0.5 + Math.random() * 0.4; this.dodgeDir = Math.random() < 0.5 ? -1 : 1; } this.lastPos = this.pos.slice(); this.stuckT = 0; }
         } else if (this.state === 'attack') {
-          this.faceTowards(pl.pos, dt, 10);
+          this.faceTowards(foe ? foe.pos : pl.pos, dt, 10);
+          if (foe && this.kind === 'ballinki' && !this.thrown && dist > 45) cmd.forward = 1; // keeps after a fleeing victim while winding up
           if (!this.thrown && this.stateT > this.K.release) { this.thrown = true; if (this.kind === 'marv') this.throwTissue(); else if (this.kind === 'ballinki') this.fart(); else if (this.kind === 'beans') this.throwPotato(); else this.throwChicken(); }
           if (this.stateT > this.K.attackEnd) { this.state = 'chase'; this.attackCd = 1.0 + Math.random() * 1.6; M.emote = null; M.setState('run', 0.2, true); }
         } else if (this.state === 'pain') { if (this.stateT > 0.5) { this.state = 'chase'; M.emote = null; M.setState('run', 0.15, true); } }

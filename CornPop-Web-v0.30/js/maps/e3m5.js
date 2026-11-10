@@ -4,9 +4,11 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M5', title: 'E3M5: THE KITCHENS', ambience: 'kitchen', music: 'assets/music/e1m5.mp3', ambient: 20,
+  name: 'E3M5', title: 'E3M5: THE KITCHENS', ambience: 'kitchen', music: 'assets/music/e1m5.mp3', ambient: 42,
   fog: { color: [0.04, 0.03, 0.022], density: 0.00032 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.3, 0.08], pattern: 'flicker' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 0.6, 1], pattern: 'gentle' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 112, 104, 'brick', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const TUN = { f: 0, c: 160, floor: 'tilebrown', ceil: 'brickred', side: 'stepside', upper: 'brickred' };
@@ -194,4 +196,6 @@ export default makeLevel({
   K.exit(X(111), 0, Z(25) + 16, 'nx');
 
   K.goal(X(14) + 16, Z(75), 64); K.goal(X(99) + 16, Z(74), 96); K.goal(X(55), Z(42), 0, { wait: 14 }); K.goal(X(6) + 16, Z(6) + 16, 32, { wait: 12 }); K.goal(X(99), Z(40), 0, { wait: 14 });
+
+  K.ruins({'seed': 3205, 'mode': 'bunker', 'theme': 'bunker', 'big': 28, 'lights': 30});
 });

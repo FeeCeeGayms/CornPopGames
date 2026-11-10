@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as skelClone } from 'three/addons/utils/SkeletonUtils.js';
+import { Face } from './face.js';
 
 export const ANIM = {
   idle: 'Idle_9', idle2: 'Idle_10', walk: 'Walking', run: 'Running', jump: 'Run_and_Jump',
@@ -72,6 +73,7 @@ export class CornPop {
     this.actions = {};
     for (const [k, name] of Object.entries(asset.animMap || ANIM)) { const clip = asset.clips[name]; if (clip) this.actions[k] = this.mixer.clipAction(clip); }
     this.head = null; this.root.traverse(o => { if (o.isBone && o.name === 'Head') this.head = o; });
+    this.face = asset.face && this.head ? new Face(this) : null; // CornPop only: blinking, pain, grins (face.js)
     this.state = null; this.emote = null; this.emoteT = 0;
     this.lookYaw = 0; this.lookPitch = 0;
     this.mixer.addEventListener('finished', (e) => { if (this.emote && e.action === this.actions[this.emote]) { this.emote = null; this.setState(this.base || 'idle', 0.25, true); } });
@@ -104,6 +106,7 @@ export class CornPop {
   }
   update(dt) {
     this.mixer.update(dt);
+    if (this.face) this.face.update(dt);
     if (this.head && (this.lookYaw || this.lookPitch)) {
       this.root.updateMatrixWorld(true);
       // rotate head in world space around world Y (turn) and camera-right (nod)

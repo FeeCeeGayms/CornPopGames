@@ -296,7 +296,7 @@ export class World {
 
   async bake(progress) {
     this.prepLights();
-    const weather = !!(this.L.rain || this.L.storm); if (weather) this.buildExposure();
+    const weather = !!(this.L.rain || this.L.storm || this.L.mist); if (weather) this.buildExposure();
     const AW = this.AW, lm = this.lmData, sm = this.smData;
     const tmp = new Float32Array(7);
     let t0 = performance.now(), done = 0;

@@ -5,8 +5,12 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M1', title: 'E1M1: DELIVERY ENTRANCE', ambience: 'street', ambient: 18, music: 'assets/music/rotted_circuitry.mp3',
-  fog: { color: [0.05, 0.05, 0.07], density: 0.00028 }, skyTint: [0.8, 0.55, 0.45],
-  styles: [{ color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.3, 1, 0.4], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.075, 0.04, 0.035], density: 0.0003 }, skyTint: [0.8, 0.55, 0.45],
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.3, 1, 0.4], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], outTint: [1, 0.62, 0.5], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'ruinwall2', 'mossstone': 'ruinwall2', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'ashground', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
+  sky: {'hell': 1, 'a': [0.06, 0.015, 0.02], 'b': [0.78, 0.17, 0.06], 'glow': [0.55, 0.16, 0.04], 'orb': {'kind': 'moon', 'az': 0.8, 'el': 0.95, 'color': [1, 0.16, 0.06]}, 'silh': 'ruins'},
+  rain: { kind: 'ash', density: 500, wind: [14, 8] }, mist: { color: [0.2, 0.1, 0.08], density: 0.0011, top: 60, range: 150 },
 }, 82, 72, 'techtan', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const LOBBY = { f: 0, c: 128, floor: 'techfloor', ceil: 'ceil', side: 'stepside', upper: 'techtan' };
@@ -121,4 +125,6 @@ export default makeLevel({
   K.exit(X(40), 112, Z(2), 'pz');
 
   K.goal(X(6) + 16, Z(12) + 16, 96);
+
+  K.ruins({ seed: 1037, theme: 'ruin', big: 26 });
 });

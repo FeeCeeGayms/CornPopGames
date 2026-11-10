@@ -5,8 +5,10 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M4', title: 'E1M4: THE OVEN FOCUS', ambience: 'cave', ambient: 16, music: 'assets/music/e1m4.mp3',
-  fog: { color: [0.05, 0.025, 0.015], density: 0.0004 },
-  styles: [{ color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.3, 0.1], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.06, 0.02, 0.015], density: 0.0004 },
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [1, 0.3, 0.1], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'ruindark', 'mossstone': 'ruinwall2', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'ashground', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
 }, 104, 80, 'bigbrown', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const ENTRY = { f: 0, c: 144, floor: 'tilebrown', ceil: 'ceil', side: 'stepside', upper: 'bigbrown' };
@@ -114,4 +116,6 @@ export default makeLevel({
   K.slices([[X(80), Z(35)], [X(80), Z(44)]]); K.health(X(99), Z(37), 48); K.juice(X(99), Z(42), 48);
 
   K.goal(X(79), Z(5) + 16, 64); K.goal(X(68), Z(64), 0);
+
+  K.ruins({ seed: 1148, theme: 'blood', big: 24 });
 });

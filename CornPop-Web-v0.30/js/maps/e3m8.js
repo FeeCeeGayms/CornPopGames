@@ -4,10 +4,12 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M8', title: 'E3M8: HORNT JAIL BREAKOUT', ambience: 'cave', music: 'assets/music/e1m8.mp3', ambient: 15,
+  name: 'E3M8', title: 'E3M8: HORNT JAIL BREAKOUT', ambience: 'cave', music: 'assets/music/e1m8.mp3', ambient: 37,
   fog: { color: [0.03, 0.032, 0.03], density: 0.00038 },
   rain: { min: [128, 0, 32], max: [1152, 600, 224] },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'flicker' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 112, 104, 'jaildark', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const CELL = { f: 0, c: 128, floor: 'jailfloor', ceil: 'jaildark', side: 'trim', upper: 'jailmetal' };
@@ -18,7 +20,7 @@ export default makeLevel({
   const PASS = { f: 0, c: 160, floor: 'jailfloor', ceil: 'jaildark', side: 'trim', upper: 'jailmetal' };
   const ARENA = { f: 0, c: 384, floor: 'diamond', ceil: 'steeldark', side: 'stepside', upper: 'steel' };
   const PLAT = { f: 96, c: 384, floor: 'diamond', ceil: 'steeldark', side: 'stepside', upper: 'steel' };
-  const ROOF = { f: 256, c: 640, floor: 'asphalt', ceil: 'sky', sky: true, side: 'stepside', upper: 'concretedark' };
+  const ROOF = { f: 256, c: 640, floor: 'pizzaroof', ceil: 'sky', sky: true, side: 'stepside', upper: 'concretedark' };
   const NUMS = Array.from({ length: 40 }, (_, i) => ['cell101', 'cell102', 'cell103'][(i + 1) % 3]);
   const rubble = (x, z, w, d, h) => K.brush([x - w / 2, 0, z - d / 2], [x + w / 2, h, z + d / 2], { tex: 'rubble', top: 'rubble' });
 
@@ -153,7 +155,13 @@ export default makeLevel({
   K.paint(52, 2, 56, 6, T({ ...PASS, c: 400 }));
   K.stairs(36, 2, 51, 6, 'W', 16, 256, { ...PASS, c: 400, side: 'stepside', floor: 'concrete' });
   K.room(4, 1, 35, 6, ROOF, 'concretedark');
-  K.decal({ at: [X(12), 257, Z(4)], n: 'up', w: 140, h: 140, tex: 'hazard', off: 0.5 });
+  // the base is a gigantic pepperoni pizza: its crust runs along the top of the roof: the getaway is across the pizza itself, with cheese running down the plates
+  K.props((pr, ctx) => { let s = 98; const rn = () => (s = (s * 16807) % 2147483647) / 2147483647; const x0 = X(4), x1 = X(36), z = Z(1) + 24, yc = 282, L = 72;
+    for (let x = x0; x < x1; x += L) { const r = 27 + rn() * 7, len = Math.min(L, x1 - x) + 6; pr.cylinder(x + len / 2 - 3, yc - len / 2 + rn() * 4, z, r, len, 'crust', { rz: Math.PI / 2, segs: 10, capTex: 'crust' }); }
+    for (let x = x0 + 10; x < x1 - 10; x += 22 + rn() * 44) { if (true) continue; const w = 12 + rn() * 20, h = Math.min(0, 18 + rn() * rn() * 110); pr.box(x, yc - 22 - h, z - 0, w, h, 5, 'cheese'); pr.sphere(x, yc - 22 - h, z - 0, w / 2, 'cheese', { segs: 8, rings: 5, sz: 0.35 });
+      if (rn() < 0.3) pr.cylinder(x + w, yc - 40 - rn() * 30 - 2.5, z - 0, 17 + rn() * 6, 5, 'pepperoni', { rx: Math.PI / 2, segs: 12, capTex: 'pepperoni' }); }
+    ctx.brush([X(4), 256, Z(1)], [X(36), 306, Z(1) + 40], { invisible: true, noshadow: true }); });
+
   for (const c of [8, 18, 28]) K.decal({ at: [X(c), 400, Z(1)], n: 'pz', w: 300, h: 140, tex: 'skyline', fullbright: true, off: 0.6 });
   K.light(X(20), 400, Z(4), 520, [0.55, 0.65, 0.95]); K.lamp(X(34), 340, Z(2), 260); K.lamp(X(20), 340, Z(2), 260);
   K.ambient(X(20), 300, Z(4), 'wind', 900, 1);
@@ -162,4 +170,6 @@ export default makeLevel({
   K.exit(X(4), 256, Z(3) + 16, 'px');
 
   K.goal(X(54), Z(78), 0, { wait: 12 }); K.goal(X(25), Z(17), -96, { wait: 10 }); K.goal(X(82), Z(10), 160, { wait: 10 }); K.goal(X(54), Z(34), 0, { wait: 40 }); K.goal(X(37), Z(30), 96, { wait: 20 }); K.goal(X(72), Z(30), 96, { wait: 20 }); K.goal(X(54), Z(46), 0, { wait: 40 }); K.goal(X(37), Z(20), 96, { wait: 15 }); K.goal(X(72), Z(40), 96, { wait: 15 });
+
+  K.ruins({'seed': 3328, 'mode': 'bunker', 'theme': 'bunker', 'big': 22, 'lights': 30, 'wreck': true, 'roof': true});
 });

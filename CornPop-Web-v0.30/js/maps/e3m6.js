@@ -4,9 +4,11 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M6', title: 'E3M6: POTATO QUARTERS', ambience: 'kitchen', music: 'assets/music/e1m6.mp3', ambient: 18,
+  name: 'E3M6', title: 'E3M6: POTATO QUARTERS', ambience: 'kitchen', music: 'assets/music/e1m6.mp3', ambient: 40,
   fog: { color: [0.035, 0.028, 0.02], density: 0.0003 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.3, 0.1], pattern: 'neon' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.45], pattern: 'gentle' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 112, 104, 'brickdark', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const LOB = { f: 0, c: 192, floor: 'carpet', ceil: 'plaster', side: 'trim', upper: 'plaster' };
@@ -16,7 +18,7 @@ export default makeLevel({
   const LGAL = { f: 176, c: 384, floor: 'wood', ceil: 'ceil', side: 'stepside' };
   const LIB = { f: 0, c: 320, floor: 'carpet', ceil: 'ceil', side: 'trim', upper: 'wood' };
   const GRN = { f: 0, c: 320, floor: 'tilebrown', ceil: 'steeldark', side: 'stepside', upper: 'concretedark' };
-  const OBS = { f: 176, c: 512, floor: 'diamond', ceil: 'sky', side: 'stepside', sky: true };
+  const OBS = { f: 176, c: 512, floor: 'pizzaroof', ceil: 'sky', side: 'stepside', sky: true };
   const POSTERS = ['pot_fuel', 'pot_glorious', 'pot_heroes', 'pot_right', 'pot_soil'];
 
   // a potato-power bedroom (image: bedroom). side 's' = room south of the corridor (door on its north edge)
@@ -173,6 +175,13 @@ export default makeLevel({
   K.room(34, 2, 78, 14, OBS, 'brickdark');
   for (const c of [38, 48, 58, 68]) K.decal({ at: [X(c), 330, Z(2)], n: 'pz', w: 300, h: 140, tex: 'skyline', fullbright: true, off: 0.6 });
   K.brush([X(34), 176, Z(2)], [X(79), 210, Z(2) + 2], { tex: 'railing', fit: true, noshadow: true });
+  // the base is a gigantic pepperoni pizza: its crust runs along the top of the deck: you are standing on the pizza, with cheese running down the plates
+  K.props((pr, ctx) => { let s = 96; const rn = () => (s = (s * 16807) % 2147483647) / 2147483647; const x0 = X(34), x1 = X(79), z = Z(2) + 28, yc = 202, L = 72;
+    for (let x = x0; x < x1; x += L) { const r = 27 + rn() * 7, len = Math.min(L, x1 - x) + 6; pr.cylinder(x + len / 2 - 3, yc - len / 2 + rn() * 4, z, r, len, 'crust', { rz: Math.PI / 2, segs: 10, capTex: 'crust' }); }
+    for (let x = x0 + 10; x < x1 - 10; x += 22 + rn() * 44) { if (true) continue; const w = 12 + rn() * 20, h = Math.min(0, 18 + rn() * rn() * 110); pr.box(x, yc - 22 - h, z - 0, w, h, 5, 'cheese'); pr.sphere(x, yc - 22 - h, z - 0, w / 2, 'cheese', { segs: 8, rings: 5, sz: 0.35 });
+      if (rn() < 0.3) pr.cylinder(x + w, yc - 40 - rn() * 30 - 2.5, z - 0, 17 + rn() * 6, 5, 'pepperoni', { rx: Math.PI / 2, segs: 12, capTex: 'pepperoni' }); }
+    ctx.brush([X(34), 176, Z(2)], [X(79), 226, Z(2) + 50], { invisible: true, noshadow: true }); });
+
   for (const [c, r] of [[40, 8], [50, 6], [62, 6], [72, 8]]) K.crates(C(c), C(r), 176, 2, 40);
   K.props(pr => { for (const c of [44, 56, 68]) pr.cylinder(X(c), 176, Z(10), 10, 110, 'metal', { segs: 10 }); });
   for (const c of [44, 56, 68]) K.lantern(X(c), 290, Z(10) - 12, 'nz', 260);
@@ -188,4 +197,6 @@ export default makeLevel({
   K.goal(X(96) + 16, Z(19), 64, { wait: 8 }); K.goal(X(56), Z(44), 0, { wait: 14 });
   K.goal(X(28), Z(30), 0, { shoot: [X(31) - 3, 220, Z(28)] }); K.goal(X(12), Z(60), 0, { shoot: [X(4) + 3, 60, Z(60)] }); K.goal(X(22), Z(30), 0, { shoot: [X(22), 230, Z(16) + 3] });
   K.goal(X(1) + 32, Z(31) + 16, 0, { wait: 10 }); K.goal(X(56), Z(8), 176, { wait: 14 });
+
+  K.ruins({'seed': 3246, 'mode': 'bunker', 'theme': 'bunker', 'big': 26, 'lights': 30, 'posters': ['pot_glorious', 'pot_heroes', 'pot_soil', 'pot_fuel', 'pot_right']});
 });

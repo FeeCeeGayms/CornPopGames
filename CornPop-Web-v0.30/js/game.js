@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { loadTextures } from './textures.js';
+import { addRuinTextures } from './ruintex.js';
+import { addBunkerTextures } from './bunkertex.js';
 import { World, CELL } from './world.js';
 import { PropBuilder } from './props.js';
 import { Player, HULL_MIN, HULL_MAX, PM } from './player.js';
@@ -11,7 +13,7 @@ import { LEVELS, EPISODES, episodeOf } from './levels.js';
 import { Arsenal, W2, W2_KEYS, makeW2Pickup } from './weapons2.js';
 import { BCM_ANIMS, BossDirector } from './boss.js';
 import { TROP_ANIMS, TropDirector } from './trop.js';
-import { Qoq, QOQ, QOQ_ANIMS, MARV, MARV_ANIMS, BALLINKI, BALLINKI_ANIMS, FRENTA, FRENTA_ANIMS, BEANS, BEANS_ANIMS, makePotato, TURD, SOAKER, SHOTGUN, CANDYGUN, Soaker, Shotgun, CandyGun, TurdLauncher, makeTurd, Particles, makeChicken, makeTissue, makeSausage, makeCandyCorn, makePickupModel, segAabb, LIT } from './combat.js';
+import { Qoq, QOQ, QOQ_ANIMS, MARV, MARV_ANIMS, BALLINKI, BALLINKI_ANIMS, FRENTA, FRENTA_ANIMS, BEANS, BEANS_ANIMS, BOOJO, BOOJO_ANIMS, INFIGHT, makeTaco, makePotato, TURD, SOAKER, SHOTGUN, CANDYGUN, Soaker, Shotgun, CandyGun, TurdLauncher, makeTurd, Particles, makeChicken, makeTissue, makeSausage, makeCandyCorn, makePickupModel, segAabb, LIT } from './combat.js';
 import { PizzaCutter } from './cutter.js';
 
 THREE.ColorManagement.enabled = false;
@@ -31,7 +33,7 @@ void main(){ vUv=uv; vLm=uv1; vWet=aWet; vec4 wp=modelMatrix*vec4(position,1.0);
 const WORLD_FRAG = `
 uniform sampler2D map; uniform sampler2D lm; uniform sampler2D sm; uniform vec3 st[4];
 uniform vec3 fogColor; uniform float fogDensity; uniform float fullbright; uniform float nolm; uniform float time; uniform vec2 scroll; uniform float warp; uniform float alpha;
-uniform float lightning; uniform float wetOn;
+uniform float lightning; uniform float wetOn; uniform float shine; uniform vec3 lightCol; uniform vec3 wetTint; uniform vec4 mist; uniform vec2 mistY;
 varying vec2 vUv; varying vec2 vLm; varying float vDepth; varying vec3 vWorld; varying float vWet;
 float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -40,23 +42,95 @@ void main(){
   vec2 uv = vUv + scroll*time;
   if (warp > 0.5) uv += vec2(sin(vUv.y*6.2832 + time*1.1), sin(vUv.x*6.2832 + time*1.3))*0.07;
   vec4 t=texture2D(map, uv);
-  if (t.r > 0.97 && t.b > 0.97 && t.g < 0.03) discard;
+  if (t.r > 0.9 && t.b > 0.9 && t.g < 0.1) discard;                       // magenta = see-through (a little slack: some old textures have noise in the key)
   vec3 light = vec3(1.0);
-  float wet = 0.0;
+  float wet = 0.0; float open = 0.0;
   if (nolm < 0.5) { vec4 L = texture2D(lm, vLm); light = L.rgb*2.0; vec4 s=texture2D(sm, vLm)*2.0; light += st[0]*s.r + st[1]*s.g + st[2]*s.b + st[3]*s.a;
-    light += vec3(0.75, 0.8, 1.0) * lightning * L.a * 2.2;                 // lightning lights everything open to the sky
+    light += lightCol * lightning * L.a * 2.2; open = L.a;                 // lightning lights everything open to the sky
     if (wetOn > 0.5 && vWet > 0.5) {                                        // rain-soaked ground: puddles in the dips, a damp sheen elsewhere
       float pn = vnoise(vWorld.xz * 0.006) * 0.65 + vnoise(vWorld.xz * 0.021) * 0.35;
       wet = L.a * mix(0.5, 1.0, smoothstep(0.45, 0.62, pn)); } }
+  if (shine > 0.0 && vWet > 0.5) wet = max(wet, shine * (0.55 + 0.45 * vnoise(vWorld.xz * 0.011)));   // polished floor plates (the Pidser Cave bunker) mirror the room
   float glow = max(1.0 - t.a, fullbright);
   vec3 c = t.rgb * mix(light, vec3(1.0), glow);
-  c *= 1.0 - 0.38 * wet;                                                  // wet surfaces are darker (the reflection is added in the blit pass)
+  c *= mix(vec3(1.0), wetTint, wet) * (1.0 - 0.38 * wet);                 // wet surfaces are darker (the reflection is added in the blit pass); blood rain stains them red
   float f = 1.0 - exp(-fogDensity*fogDensity*vDepth*vDepth);
-  gl_FragColor = vec4(mix(c, fogColor, clamp(f,0.0,1.0)), alpha * (1.0 - 0.5 * wet * (1.0 - clamp(f, 0.0, 1.0))));
+  c = mix(c, fogColor, clamp(f,0.0,1.0));
+  if (mist.a > 0.0 && open > 0.01) {                                      // mist that hangs over open ground (thicker low down, drifting)
+    float mh = mistY.y > 0.0 ? clamp((mistY.x - vWorld.y) / mistY.y, 0.0, 1.0) : 1.0;
+    float mn = 0.6 + 0.4 * vnoise(vWorld.xz * 0.004 + vec2(time * 0.05, time * 0.03));
+    c = mix(c, mist.rgb, clamp((1.0 - exp(-vDepth * mist.a)) * mh * open * mn, 0.0, 0.92)); }
+  gl_FragColor = vec4(c, alpha * (1.0 - 0.5 * wet * (1.0 - clamp(f, 0.0, 1.0))));
 }`;
 const SKY_FRAG = `
 uniform sampler2D map; uniform float time; uniform vec3 camPos; uniform vec3 tint; uniform float city; uniform float storm; uniform float bolt; uniform float boltAz; uniform float boltSeed; uniform vec3 fogColor; varying vec3 vWorld;
+uniform float hell; uniform vec3 skyA; uniform vec3 skyB; uniform vec3 glowCol; uniform vec3 orbDir; uniform vec3 orbCol; uniform float orbKind; uniform float silh; uniform vec3 boltCol;
 float h1(float n){ return fract(sin(n) * 43758.5453); }
+float hn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); float n = dot(i, vec2(1.0, 57.0));
+  return mix(mix(h1(n), h1(n + 1.0), f.x), mix(h1(n + 57.0), h1(n + 58.0), f.x), f.y); }
+// Crypt of Hornt: boiling clouds lit from below, something terrible hanging in the sky, and black ruins or volcanoes on the horizon
+vec3 hellSky(vec3 d, float lum, float a){
+  float el = asin(clamp(d.y, -1.0, 1.0)); float az = atan(d.z, d.x); vec2 ring = vec2(cos(az), sin(az));
+  vec2 sp = d.xz / max(d.y, 0.06) * 1.3;                                       // boiling cloud deck: dark masses, the cracks between them glow
+  float n = hn(sp * 1.1 + vec2(time * 0.02, time * 0.012)) * 0.5 + hn(sp * 2.7 - vec2(time * 0.03, 0.0)) * 0.3 + hn(sp * 6.1 + time * 0.04) * 0.14 + lum * 0.25;
+  float k = smoothstep(0.34, 0.72, n); a = max(a, smoothstep(0.5, 0.2, n));
+  vec3 c = mix(skyA, skyB, k * k * 0.55) + skyB * pow(k, 5.0) * 0.9;
+  c = mix(c, skyA * 0.6, smoothstep(0.42, 0.2, n) * 0.7);
+  if (orbKind > 0.5 && dot(d, orbDir) > 0.0) {
+    vec3 u = normalize(cross(vec3(0.0, 1.0, 0.0), orbDir)), v = cross(orbDir, u); vec2 q = vec2(dot(d, u), dot(d, v)); float r = length(q); float veil = 1.0 - a * 0.4;
+    if (orbKind < 1.5) {                                                       // a huge blood moon
+      float disc = smoothstep(0.150, 0.142, r); float cr = hn(q * 30.0) * 0.5 + hn(q * 75.0) * 0.3;
+      c = mix(c, orbCol * (0.5 + cr * 0.7) * veil + c * 0.2, disc); c += orbCol * 0.4 * exp(-r * 6.0) * veil;
+    } else if (orbKind < 2.5) {                                                // the black sun: an eclipse with a burning corona
+      float ang = atan(q.y, q.x); float ray = 0.55 + 0.45 * hn(vec2(ang * 7.0, time * 0.35));
+      c += orbCol * exp(-max(r - 0.12, 0.0) * (8.0 / ray)) * step(0.12, r) * 1.7 * veil;
+      c = mix(c, vec3(0.0), smoothstep(0.126, 0.118, r)); c += orbCol * smoothstep(0.014, 0.0, abs(r - 0.123)) * 1.6 * veil;
+    } else {                                                                   // the eye that watches the crypt (it blinks)
+      float bl = smoothstep(0.0, 0.03, abs(fract(time * 0.06) - 0.5)); float lens = 0.105 * (1.0 - pow(q.x / 0.24, 2.0)) * bl;
+      if (abs(q.x) < 0.24 && abs(q.y) < lens) {
+        float ir = length(q); vec3 e = orbCol * (0.45 + 0.55 * hn(vec2(atan(q.y, q.x) * 9.0, ir * 26.0)));
+        e = mix(e, vec3(1.0, 0.92, 0.55), smoothstep(0.09, 0.0, ir) * 0.55);
+        e = mix(e, vec3(0.0), smoothstep(0.016 * (1.0 - pow(q.y / 0.105, 2.0)) + 0.005, 0.002, abs(q.x)));
+        e *= smoothstep(0.0, 0.02, lens - abs(q.y)); c = mix(c, e, 0.75 + 0.25 * veil);
+      }
+      c += orbCol * 0.28 * exp(-r * 5.0) * veil;
+    }
+  }
+  c += glowCol * exp(-max(el, 0.0) * 4.2) * (0.75 + 0.25 * sin(time * 0.6 + az * 4.0));                // firelight under the clouds
+  c += boltCol * storm * (0.25 + a * 1.3);
+  if (silh > 1.5) {                                                            // a volcano: the glow of its plume behind the mountains
+    float dv = abs(atan(sin(az - 2.2), cos(az - 2.2))); c += vec3(1.0, 0.4, 0.08) * exp(-dv * dv * 22.0 - max(el - 0.5, 0.0) * 5.0) * (0.75 + 0.25 * sin(time * 1.7));
+  }
+  if (silh > 0.5) for (int layer = 0; layer < 2; layer++) {
+    float L = float(layer); float hg; float lava = 0.0; float win = 0.0;
+    if (silh < 1.5) {                                                          // ruined spires, broken towers, rubble
+      float cols = 44.0 + L * 38.0; float uu = (az / 6.2832 + 0.5) * cols + L * 13.0; float id = floor(uu), fu = fract(uu);
+      float w = 0.35 + 0.6 * h1(id * 5.3 + L); float x = abs(fu - 0.5) / (w * 0.5); float kind = h1(id * 9.1 + L * 2.0);
+      hg = 0.12 + pow(h1(id * 1.7 + 3.1 + L * 9.0), 2.0) * (0.66 - L * 0.26);
+      if (x > 1.0) hg = 0.07 + 0.05 * h1(id * 2.9) + 0.035 * hn(vec2(fu * 7.0 + id, L));
+      else if (kind < 0.35) hg = hg * (1.0 - 0.75 * x * sqrt(x)) + 0.04;                                 // a spire
+      else if (kind < 0.7) hg -= 0.08 * step(0.5, h1(floor(fu * 6.0) + id * 3.0)) + 0.06 * hn(vec2(fu * 9.0 + id, 3.0)); // a broken tower
+      else hg *= 1.0 - 0.32 * step(0.55, x);                                                             // a stepped keep
+      if (x < 0.8) { vec2 wc = vec2(fu * 5.0, el * 34.0); vec2 wf = fract(wc); win = step(0.86, h1(dot(floor(wc) + id * 7.0, vec2(1.3, 7.1)) + L)) * step(0.3, wf.x) * step(wf.x, 0.6) * step(0.25, wf.y) * step(wf.y, 0.75); }
+    } else {                                                                   // black volcanic mountains
+      hg = 0.09 + (hn(ring * 2.2 + L * 7.0) * 0.62 + hn(ring * 7.0 + 5.0 + L) * 0.26 + hn(ring * 23.0 + 9.0) * 0.1) * (0.5 - L * 0.2);
+      if (layer == 1) { float dv = abs(atan(sin(az - 2.2), cos(az - 2.2))); float cone = 0.56 - dv * 1.25 - 0.05 * smoothstep(0.05, 0.0, dv); hg = max(hg, cone);
+        if (el < cone) { float th = atan(dv, max(0.52 - el, 0.001)); lava = smoothstep(0.86, 0.97, hn(vec2(th * 16.0, 2.0) + floor(az - 2.2 + 9.0))) * exp(-(0.52 - el) * 3.5) * (0.7 + 0.3 * sin(time * 2.0 + el * 30.0)); } }
+    }
+    if (el < hg) {
+      vec3 b = mix(vec3(0.012, 0.008, 0.01), skyA * 0.9 + glowCol * 0.3, layer == 0 ? 0.6 : 0.0);
+      b += glowCol * (layer == 0 ? 0.45 : 0.22) * exp(-max(el, 0.0) * 8.0) + vec3(1.0, 0.36, 0.06) * lava * 1.6 + vec3(1.0, 0.3, 0.08) * win * (layer == 0 ? 0.3 : 0.7);
+      return b + boltCol * storm * (layer == 0 ? 0.3 : 0.1);
+    }
+  }
+  if (bolt > 0.01) {                                                           // lightning down to the horizon
+    float x = atan(sin(az - boltAz), cos(az - boltAz)); float off = 0.0; float amp = 0.02;
+    for (int j = 0; j < 5; j++) { float fj = float(j); off += (h1(floor(el * (8.0 + fj * 9.0)) + boltSeed + fj * 11.0) - 0.5) * amp; amp *= 0.55; }
+    float core = smoothstep(0.0025 + 0.002 * bolt, 0.0, abs(x - off)) * step(el, 0.75 + h1(boltSeed) * 0.3);
+    c += (boltCol + 0.5) * core * bolt * 2.4 + boltCol * smoothstep(0.25, 0.0, abs(x - off)) * bolt * 0.4;
+  }
+  return c;
+}
 // New York at night: two layers of skyscraper silhouettes with lit windows, a tower with a spire, the moon behind the clouds
 vec3 skyline(vec3 d, vec3 c, float cloud){
   float el = asin(clamp(d.y, -1.0, 1.0)); float az = atan(d.z, d.x);
@@ -98,6 +172,7 @@ void main(){
   float a = smoothstep(0.35, 0.65, dot(front.rgb, vec3(0.333)));
   vec3 c = mix(back*0.55, front.rgb*1.2, a) * tint;
   if (city > 0.5) { c += vec3(0.7, 0.75, 0.95) * storm * (0.25 + a * 1.3); c = skyline(normalize(vWorld - camPos), c, a); }
+  if (hell > 0.5) c = hellSky(normalize(vWorld - camPos), dot(mix(back * 0.55, front.rgb * 1.2, a), vec3(0.333)), a);
   gl_FragColor = vec4(c, 1.0);
 }`;
 // flames: a camera-facing (around Y) quad with scrolling noise; additive, fades with fog
@@ -262,7 +337,9 @@ export class Game {
     };
     this.input = new Input(this.canvas, this.ui);
     this.shared = { lm: { value: null }, sm: { value: null }, st: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) }, fogColor: { value: new THREE.Color(0, 0, 0) }, fogDensity: { value: 0 }, time: { value: 0 }, camPos: { value: new THREE.Vector3() },
-      lightning: { value: 0 }, wetOn: { value: 0 }, storm: { value: 0 }, bolt: { value: 0 }, boltAz: { value: 0 }, boltSeed: { value: 0 }, city: { value: 0 } };
+      lightning: { value: 0 }, wetOn: { value: 0 }, storm: { value: 0 }, bolt: { value: 0 }, boltAz: { value: 0 }, boltSeed: { value: 0 }, city: { value: 0 },
+      lightCol: { value: new THREE.Color(0.75, 0.8, 1) }, wetTint: { value: new THREE.Color(1, 1, 1) }, mist: { value: new THREE.Vector4(0, 0, 0, 0) }, mistY: { value: new THREE.Vector2(0, 0) },
+      hell: { value: 0 }, skyA: { value: new THREE.Color() }, skyB: { value: new THREE.Color() }, glowCol: { value: new THREE.Color() }, orbDir: { value: new THREE.Vector3(0, 1, 0) }, orbCol: { value: new THREE.Color() }, orbKind: { value: 0 }, silh: { value: 0 }, boltCol: { value: new THREE.Color(0.7, 0.75, 0.95) } };
     this.state = 'loading'; this.levelIndex = 0; this.paused = false; this.clock = new THREE.Clock();
     this.applyOpts();
     addEventListener('resize', () => this.resize()); this.resize();
@@ -329,9 +406,9 @@ export class Game {
 
   async init(onProgress) {
     onProgress(0.05, 'Generating textures');
-    this.T = await loadTextures(); this.applyTexQuality();
+    this.T = addBunkerTextures(addRuinTextures(await loadTextures())); this.applyTexQuality();
     onProgress(0.15, 'Loading CornPop');
-    this.cpAsset = await new CornPopAsset().load('assets/models/cornpop.glb', p => onProgress(0.15 + p * 0.4, 'Loading CornPop'));
+    this.cpAsset = await new CornPopAsset().load('assets/models/cornpop.glb', p => onProgress(0.15 + p * 0.4, 'Loading CornPop')); this.cpAsset.face = true;
     onProgress(0.55, 'Loading Qoq');
     this.qoqAsset = await new CornPopAsset().load('assets/models/qoq.glb', p => onProgress(0.55 + p * 0.25, 'Loading Qoq'));
     this.qoqAsset.animMap = QOQ_ANIMS;
@@ -347,6 +424,7 @@ export class Game {
       sub('Walking', 'B_idle', 0, 2); sub('Running', 'B_attack', 0, 20); sub('Walking', 'B_pain', 6, 16); }
     this.beansAsset.animMap = BEANS_ANIMS;
     try { this.bcmAsset = await new CornPopAsset().load('assets/models/bcm.glb', p => onProgress(0.99, 'Loading BCM')); this.bcmAsset.animMap = BCM_ANIMS; } catch (e) { console.warn('BCM model missing', e); this.bcmAsset = null; }
+    try { this.boojoAsset = await new CornPopAsset().load('assets/models/boojo.glb', p => onProgress(0.993, 'Loading Boojo')); this.boojoAsset.animMap = BOOJO_ANIMS; } catch (e) { console.warn('Boojo model missing', e); this.boojoAsset = null; }
     try { this.tropAsset = await new CornPopAsset().load('assets/models/trop.glb', p => onProgress(0.995, 'Loading Trop')); this.tropAsset.animMap = TROP_ANIMS; } catch (e) { console.warn('Trop model missing', e); this.tropAsset = null; }
     this.soaker = new Soaker(this); this.cutter = new PizzaCutter(this); this.shotgun = new Shotgun(this); this.candygun = new CandyGun(this); this.turdgun = new TurdLauncher(this); this.arsenal = new Arsenal(this); this.aim = new THREE.Object3D();
     for (const w of Object.values(this.arsenal.guns)) try { this.renderer.compile(w.scene, w.cam); } catch (e) { } // no shader hitch on the first switch
@@ -354,7 +432,7 @@ export class Game {
     this.gooCanvas = document.createElement('canvas'); this.gooCanvas.width = 160; this.gooCanvas.height = 96;
     this.gooTex = new THREE.CanvasTexture(this.gooCanvas); this.gooTex.magFilter = THREE.NearestFilter; this.gooTex.minFilter = THREE.NearestFilter; this.gooTex.generateMipmaps = false;
     this.blitMat.uniforms.gooTex.value = this.gooTex;
-    this.portrait = new Portrait(this.cpAsset, 64);
+    this.portrait = new Portrait(this.cpAsset, 96);
     this.body = this.cpAsset.instance();
     const s = PLAYER_HEIGHT / 1.94; this.body.root.scale.setScalar(s);
     for (const m of this.body.mats) { m.emissiveMap = m.map; m.emissive = new THREE.Color(0, 0, 0); }
@@ -366,19 +444,21 @@ export class Game {
 
   // ---- materials ----
   worldMat(tex, o = {}) {
+    tex = this.level?.retex?.[tex] || tex; // a map can re-skin the stock textures (Crypt of Hornt's ruins)
     const key = tex + (o.sky ? 's' : '') + (o.fullbright ? 'f' : '') + (o.nolm ? 'n' : '') + (o.liquid ? 'l' : '');
     if (this.matCache.has(key)) return this.matCache.get(key);
     const map = this.T[tex] || this.T.brick;
     let m;
     const S = this.shared;
-    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
+    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor, hell: S.hell, skyA: S.skyA, skyB: S.skyB, glowCol: S.glowCol, orbDir: S.orbDir, orbCol: S.orbCol, orbKind: S.orbKind, silh: S.silh, boltCol: S.boltCol }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
     else m = new THREE.ShaderMaterial({
-      uniforms: { map: { value: map }, lm: this.shared.lm, sm: this.shared.sm, st: this.shared.st, fogColor: this.shared.fogColor, fogDensity: this.shared.fogDensity, time: this.shared.time, fullbright: { value: o.fullbright || o.liquid ? 1 : 0 }, nolm: { value: o.nolm || o.liquid ? 1 : 0 }, scroll: { value: new THREE.Vector2(...(this.scrollTex?.[tex] || (o.liquid ? [0.02, 0.01] : [0, 0]))) }, warp: { value: o.liquid ? 1 : 0 }, alpha: { value: o.liquid ? 0.82 : 1 }, lightning: S.lightning, wetOn: o.liquid ? { value: 0 } : S.wetOn },
+      uniforms: { map: { value: map }, lm: this.shared.lm, sm: this.shared.sm, st: this.shared.st, fogColor: this.shared.fogColor, fogDensity: this.shared.fogDensity, time: this.shared.time, fullbright: { value: o.fullbright || o.liquid ? 1 : 0 }, nolm: { value: o.nolm || o.liquid ? 1 : 0 }, scroll: { value: new THREE.Vector2(...(this.scrollTex?.[tex] || (o.liquid ? [0.02, 0.01] : [0, 0]))) }, warp: { value: o.liquid ? 1 : 0 }, alpha: { value: o.liquid ? 0.82 : 1 }, lightning: S.lightning, wetOn: o.liquid ? { value: 0 } : S.wetOn, shine: { value: o.liquid || o.fullbright ? 0 : (map.userData.shine || 0) * (this.level?.gloss ?? 1) }, lightCol: S.lightCol, wetTint: S.wetTint, mist: S.mist, mistY: S.mistY },
       vertexShader: WORLD_VERT, fragmentShader: WORLD_FRAG, transparent: !!o.liquid, depthWrite: !o.liquid,
     });
     this.matCache.set(key, m); return m;
   }
   propMat(tex, fullbright) {
+    tex = this.level?.retex?.[tex] || tex;
     const map = this.T[tex] || this.T.brick;
     if (fullbright) return new THREE.MeshBasicMaterial({ map, fog: true }); // lamps, neon, lit signs: unlit glow
     const mat = new THREE.MeshStandardMaterial({ map, roughness: tex.includes('steel') ? 0.25 : 0.7, metalness: tex.includes('steel') ? 0.8 : 0.1, vertexColors: true, envMap: this.envMap });
@@ -444,7 +524,7 @@ export class Game {
     this.weapon = this.hasWeapon(this.carry.weapon) ? this.carry.weapon : this.hasSoaker ? 'soaker' : 'cutter'; this.cutter.raise = 1; this.candyShots = []; this.turdShots = []; this.fireballs = [];
     this.gooT = 0; this.blitMat.uniforms.goo.value = 0; this.tissues = []; this.sausageShots = []; this.farts = []; this.piles = []; this.potatoes = []; this.debris = []; this.sickT = 0; this.retchT = 0; this.retchCd = 0;
     this.fires = [];
-    this.kills = 0; this.playerDead = false; this.noiseT = 0; this.trail = []; this.chickens = []; this.droplets = []; this.puddles = []; this.splashT = 0;
+    this.faceReact('neutral'); this.kills = 0; this.playerDead = false; this.noiseT = 0; this.trail = []; this.chickens = []; this.droplets = []; this.puddles = []; this.splashT = 0;
     this.particles = new Particles(this.scene); this.dropFx = new Particles(this.scene, 400); this.dropFx.points.material.size = 4.2;
     const { ep, mi } = episodeOf(i); this.ep = ep; this.mi = mi;
     if (ep === 1) { // Episode 2 (New York): the whole gang from the first street - Marvs, Ballinkis, a rising share of Frentas (1 in 9 ... 1 in 4), Beans
@@ -457,9 +537,9 @@ export class Game {
     { let b = 0; for (const e of this.ents) if (e.type === 'qoq' && b++ % 2 === 1) e.type = 'beans'; } // half of the remaining Qoqs are Beans
     this.placeExtras(i);
     for (const e of this.ents) this.spawnEnt(e);
-    this.enemies = this.ents.filter(e => ['qoq', 'marv', 'ballinki', 'frenta', 'beans'].includes(e.type)).map(e => new Qoq(this, e));
+    this.enemies = this.ents.filter(e => ['qoq', 'marv', 'ballinki', 'frenta', 'beans', 'boojo'].includes(e.type)).map(e => new Qoq(this, e));
     this.shootables = this.ents.filter(e => e.type === 'button' && e.shoot);
-    this.killsTotal = this.enemies.length;
+    this.killsTotal = this.enemies.filter(e => !e.boojo).length; // Boojos are bystanders, not kills
     this.playerBrush = W.addDynamic({ min: [0, 0, 0], max: [0, 0, 0], solid: false, shadow: false });
     this.waves = new Map();
     for (const e of this.ents) if (e.type === 'wave') this.waves.set(e.id, { def: e, members: [], state: 'idle' });
@@ -469,7 +549,13 @@ export class Game {
     this.scene.add(this.body.root); this.scene.add(this.bodyAmb); this.scene.add(this.bodySun);
     this.setupRain(def.rain);
     // weather: wet reflective ground under the rain, New York sky, lightning storms
-    this.shared.wetOn.value = def.rain || def.wet ? 1 : 0; this.shared.city.value = def.city ? 1 : 0;
+    this.shared.wetOn.value = this.rain || def.wet ? 1 : 0; this.shared.city.value = def.city ? 1 : 0;
+    { const U = this.shared, sk = def.sky || {}, sc = (def.storm && def.storm.color) || [0.75, 0.8, 1];
+      U.lightCol.value.setRGB(...sc); U.boltCol.value.setRGB(sc[0] * 0.93, sc[1] * 0.94, sc[2] * 0.95); U.wetTint.value.setRGB(...((this.rain && this.rain.r.wetTint) || [1, 1, 1]));
+      const m = def.mist; U.mist.value.set(...(m ? m.color : [0, 0, 0]), m ? m.density || 0.0012 : 0); U.mistY.value.set(m && m.top != null ? m.top : 0, m && m.top != null ? m.range || 160 : 0);
+      U.hell.value = sk.hell ? 1 : 0; U.skyA.value.setRGB(...(sk.a || [0.05, 0.01, 0.01])); U.skyB.value.setRGB(...(sk.b || [0.7, 0.12, 0.04])); U.glowCol.value.setRGB(...(sk.glow || [0.5, 0.12, 0.03]));
+      const o = sk.orb; U.orbKind.value = o ? ({ moon: 1, sun: 2, eye: 3 }[o.kind] || 0) : 0; if (o) { const az = o.az || 0, el = o.el ?? 0.9; U.orbDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); U.orbCol.value.setRGB(...(o.color || [1, 0.15, 0.05])); }
+      U.silh.value = { ruins: 1, volcano: 2 }[sk.silh] || 0; }
     this.baseFog = (def.fog || { color: [0, 0, 0] }).color.slice();
     this.storm = def.storm ? { cfg: def.storm, next: 2 + Math.random() * 4, t: 99, pulses: [], power: 0 } : null;
     this.shared.lightning.value = this.shared.storm.value = this.shared.bolt.value = 0;
@@ -499,11 +585,13 @@ export class Game {
     const game = this;
     return {
       W, props, T: this.T, C: c => c * CELL,
+      ents: () => game.ents, gridBrushes: W.brushes.length,
       floor: (c, r) => W.cell(c, r).f ?? 0,
       brush: (min, max, o = {}) => W.addBrush({ min, max, ...o }),
       box: (c0, r0, c1, r1, y0, y1, o = {}) => W.addBrush({ min: [c0 * CELL, y0, r0 * CELL], max: [c1 * CELL, y1, r1 * CELL], ...o }),
       decal: d => W.addDecal(d),
-      light: (x, y, z, light = 200, color = [1, 1, 1], style = 0, o = {}) => W.addLight({ pos: [x, y, z], light, color, style, ...o }),
+      light: (x, y, z, light = 200, color = [1, 1, 1], style = 0, o = {}) => { const L = game.level, e = W.cell(Math.floor(x / CELL), Math.floor(z / CELL)), t = (L.outTint && !e.solid && e.sky) ? L.outTint : L.lightTint; // lights under the open sky take the sky's colour
+        return W.addLight({ pos: [x, y, z], light, color: t && !o.raw ? [color[0] * t[0], color[1] * t[1], color[2] * t[2]] : color, style, ...o }); },
       ent: e => { game.ents.push(e); if (e.type === 'teleport') (W.navLinks || (W.navLinks = [])).push({ kind: 'tele', from: [(e.min[0] + e.max[0]) / 2, e.min[1], (e.min[2] + e.max[2]) / 2], to: e.dest }); return e; },
       at: (c, r, dy = 0) => [c * CELL + CELL / 2, (W.cell(Math.floor(c), Math.floor(r)).f ?? 0) + dy, r * CELL + CELL / 2],
       mover: m => W.addMover(m),
@@ -682,6 +770,7 @@ export class Game {
   dropPickup(type, pos, amount) { const e = { type, pos: pos.slice(), amount, dropped: true }; this.ents.push(e); this.spawnEnt(e); }
 
   // ---- projectiles ----
+  playerOnSeg(p0, p1) { const pl = this.player; return this.playerDead ? -1 : segAabb(p0, p1, [pl.pos[0] - 18, pl.pos[1] - 26, pl.pos[2] - 18], [pl.pos[0] + 18, pl.pos[1] + 34, pl.pos[2] + 18]); }
   spawnChicken(from, v, owner) {
     const m = makeChicken(); m.position.set(...from); this.scene.add(m);
     this.chickens.push({ p: from.slice(), v: v.slice(), mesh: m, owner, t: 0, spin: [Math.random() * 6 - 3, Math.random() * 4 - 2] });
@@ -691,8 +780,10 @@ export class Game {
     for (const c of this.chickens) {
       c.t += dt; c.v[1] -= QOQ.chickenGravity * dt;
       const p1 = [c.p[0] + c.v[0] * dt, c.p[1] + c.v[1] * dt, c.p[2] + c.v[2] * dt];
-      let dead = false;
-      if (!this.playerDead && segAabb(c.p, p1, [pl.pos[0] - 18, pl.pos[1] - 26, pl.pos[2] - 18], [pl.pos[0] + 18, pl.pos[1] + 34, pl.pos[2] + 18]) >= 0) {
+      let dead = false; const pt = this.playerOnSeg(c.p, p1), hit = this.enemyOnSeg(c.p, p1, c.owner, pt >= 0 ? pt : 1);
+      if (hit && hit.t <= this.world.trace(c.p, p1, [-3, -3, -3], [3, 3, 3], null, true).fraction) { // friendly fire
+        hit.e.hurt(QOQ.chickenDamage * INFIGHT.damage, false, c.owner); this.featherBurst(hit.p, 10); this.sfx.play('chickenHit'); dead = true;
+      } else if (pt >= 0) {
         this.damagePlayer(QOQ.chickenDamage); this.flash = { rgb: [1, 0.55, 0.5], a: 0.4 }; this.featherBurst(c.p, 6, true); this.sfx.play('chickenHit'); dead = true;
       } else {
         const tr = this.world.trace(c.p, p1, [-3, -3, -3], [3, 3, 3], null, true);
@@ -777,11 +868,38 @@ export class Game {
     const pool = items.filter(e => !inSecret(e.pos));
     const drop = type => { for (let tries = 0; tries < 20 && pool.length; tries++) { const e = pool[Math.floor(Math.random() * pool.length)]; const p = this.freeSpotNear(e.pos); if (p) { this.ents.push({ type, pos: p }); return; } } };
     const { ep, mi } = episodeOf(i);
+    this.placeBoojos(pool);
     this.arsenal.placeAll(drop, ep, mi, i);
     if (ep === 1) { drop('shotgun'); if (mi >= 2) drop('candygun'); if (mi >= 4) drop('turdgun'); return; } // E2: candy gun lies at the start of E2M2, the turd launcher at the start of E2M4
     if (mi >= 2) drop('shotgun');
     if (mi >= 3) drop('candygun');
     if (mi >= 4) drop('turdgun');
+  }
+  // Boojo: 2-3 per map, at random spots next to pickups (never in secrets, not near the start, not next to each other, with headroom)
+  placeBoojos(pool) {
+    if (!this.boojoAsset || !pool.length) return;
+    const st = this.ents.find(e => e.type === 'start'), W = this.world, spots = [], want = 2 + (Math.random() < 0.5 ? 1 : 0);
+    for (let tries = 0; tries < 60 && spots.length < want; tries++) {
+      const e = pool[Math.floor(Math.random() * pool.length)]; const p = this.freeSpotNear(e.pos); if (!p) continue;
+      if (st && Math.hypot(p[0] - st.pos[0], p[2] - st.pos[2]) < 640) continue;
+      if (spots.some(q => Math.hypot(q[0] - p[0], q[2] - p[2]) < 500)) continue;
+      const c = W.cell(Math.floor(p[0] / CELL), Math.floor(p[2] / CELL)); if (c.c - c.f < 88 || W.testPosition([p[0], p[1] + 25, p[2]], [-16, -24, -16], [16, 34, 16])) continue;
+      // keep clear of lifts, doors, crushers and teleporters (a Boojo under a lift would hold it up), hazards, and narrow corridors
+      if (W.movers.some(m => p[0] > m.min[0] - 96 && p[0] < m.max[0] + 96 && p[2] > m.min[2] - 96 && p[2] < m.max[2] + 96)) continue;
+      if (this.ents.some(e => (e.type === 'teleport' || e.type === 'hurt') && e.min && p[0] > e.min[0] - 64 && p[0] < e.max[0] + 64 && p[2] > e.min[2] - 64 && p[2] < e.max[2] + 64)) continue;
+      let open = 0; for (let dx = -2; dx <= 2; dx++) for (let dz = -2; dz <= 2; dz++) { const n = W.cell(Math.floor(p[0] / CELL) + dx, Math.floor(p[2] / CELL) + dz); if (!n.solid && Math.abs(n.f - c.f) < 2) open++; }
+      if (open < 20) continue; // at least 20 of the 25 cells around him are open floor at his height
+      spots.push(p); this.ents.push({ type: 'boojo', pos: p, angle: Math.random() * Math.PI * 2 });
+    }
+  }
+  // infighting: the first live monster (or Boojo) other than `owner` that the segment p0 -> p1 passes through, before `limit` (0..1)
+  enemyOnSeg(p0, p1, owner, limit = 1, pad = 0) {
+    let best = limit, hit = null;
+    for (const e of this.enemies) {
+      if (e === owner || !(e instanceof Qoq) || !e.alive || e.dormant) continue; const hw = (e.K.hw || 18) + pad;
+      const t = segAabb(p0, p1, [e.pos[0] - hw, e.pos[1] - 26, e.pos[2] - hw], [e.pos[0] + hw, e.pos[1] + e.K.height - 22, e.pos[2] + hw]); if (t >= 0 && t <= best) { best = t; hit = e; }
+    }
+    return hit && { e: hit, t: best, p: [p0[0] + (p1[0] - p0[0]) * best, p0[1] + (p1[1] - p0[1]) * best, p0[2] + (p1[2] - p0[2]) * best] };
   }
   // don't let CornPop stand on a Qoq's head: slide him off sideways (and give the Qoq a shove the other way)
   slideOffHeads() {
@@ -850,6 +968,11 @@ export class Game {
       for (let i = 0; i < 7; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(rnd(1.5, 3.5), 8, 5), gm); const a = rnd(0, 6.3), r = rnd(0, 24); s.position.set(Math.cos(a) * r, 1, Math.sin(a) * r); s.scale.y = 0.4; grp.add(s); }
       for (let i = 0; i < 40; i++) this.particles.spawn(mid, [rnd(-160, 160), rnd(40, 200), rnd(-160, 160)], [0.35, 1, 0.45], rnd(0.8, 1.6), -20, 2);
       this.sfx.play('frentaDeath'); this.sfx.play('goo');
+    } else if (kind === 'tacos') { // Boojo bursts into a shower of tacos that bounce and settle on the floor
+      for (let i = 0; i < 11; i++) this.addDebris([x + rnd(-10, 10), fy + 20 + rnd(0, 20), z + rnd(-10, 10)], [rnd(-200, 200), rnd(180, 400), rnd(-200, 200)], rnd(0.85, 1.2), makeTaco);
+      const cols = [[0.36, 0.76, 0.23], [0.85, 0.19, 0.11], [1, 0.82, 0.23], [0.42, 0.23, 0.12], [0.91, 0.7, 0.29]];
+      for (let i = 0; i < 40; i++) this.particles.spawn(mid, [rnd(-230, 230), rnd(60, 280), rnd(-230, 230)], cols[i % cols.length], rnd(0.5, 1.1), 500);
+      puddle(20, 0xc85a20, 0.7); this.sfx.play('boojoPop'); this.sfx.play('squelch');
     } else if (kind === 'pubes') {
       puddle(32, 0xe8c818, 0.82); puddle(16, 0xffe24a, 0.7, 0.9);
       const pos = []; const add = (x0, y0, z0) => { // one curly hair = a short random-walk squiggle of line segments
@@ -879,6 +1002,8 @@ export class Game {
       const a = Math.random() * Math.PI * 2, r = Math.random() * 45; m.position.set(Math.cos(a) * r, Math.random() * 40, Math.sin(a) * r); m.userData.s = 22 + Math.random() * 26; m.userData.v = [(Math.random() - 0.5) * 14, 6 + Math.random() * 8, (Math.random() - 0.5) * 14]; grp.add(m); puffs.push(m);
     }
     this.farts.push({ pos: pos.slice(), grp, puffs, t: 0, life: BALLINKI.cloudTime, owner });
+    for (const e of this.enemies) { if (e === owner || !(e instanceof Qoq) || !e.alive || e.dormant) continue; // the first blast hurts anyone else caught in it
+      if (Math.hypot(e.pos[0] - pos[0], (e.pos[1] - pos[1]) * 0.7, e.pos[2] - pos[2]) < BALLINKI.cloudRadius) e.hurt(INFIGHT.fartHit, false, owner); }
     this.sfx.play('fart'); for (let i = 0; i < 14; i++) this.particles.spawn([pos[0], pos[1] + 10, pos[2]], [(Math.random() - 0.5) * 160, Math.random() * 60, (Math.random() - 0.5) * 160], [0.45, 0.75, 0.15], 1 + Math.random(), -10, 2);
   }
   updateFarts(dt) {
@@ -890,6 +1015,12 @@ export class Game {
       if (Math.random() < dt * 10) this.particles.spawn([f.pos[0] + (Math.random() - 0.5) * 120, f.pos[1] + Math.random() * 60, f.pos[2] + (Math.random() - 0.5) * 120], [0, 12, 0], [0.5, 0.8, 0.2], 1.2, -6, 1);
       const d = Math.hypot(pl.pos[0] - f.pos[0], (pl.pos[1] - f.pos[1]) * 0.7, pl.pos[2] - f.pos[2]);
       if (!this.playerDead && d < BALLINKI.cloudRadius * (0.6 + 0.4 * grow) && fade > 0.2) inCloud = true;
+      f.tick = (f.tick || 0) + dt;
+      if (f.tick >= 0.25 && fade > 0.2) { // friendly fire: everyone else caught in the cloud chokes too
+        for (const e of this.enemies) { if (e === f.owner || !(e instanceof Qoq) || !e.alive || e.dormant) continue;
+          if (Math.hypot(e.pos[0] - f.pos[0], (e.pos[1] - f.pos[1]) * 0.7, e.pos[2] - f.pos[2]) < BALLINKI.cloudRadius * (0.6 + 0.4 * grow)) e.hurt(BALLINKI.sickDps * INFIGHT.damage * f.tick, false, f.owner); }
+        f.tick = 0;
+      }
       keep.push(f);
     }
     this.farts = keep;
@@ -914,8 +1045,10 @@ export class Game {
     for (const c of this.tissues) {
       c.t += dt; c.v[1] -= MARV.tissueGravity * dt;
       const p1 = [c.p[0] + c.v[0] * dt, c.p[1] + c.v[1] * dt, c.p[2] + c.v[2] * dt];
-      let dead = false;
-      if (!this.playerDead && segAabb(c.p, p1, [pl.pos[0] - 18, pl.pos[1] - 26, pl.pos[2] - 18], [pl.pos[0] + 18, pl.pos[1] + 34, pl.pos[2] + 18]) >= 0) {
+      let dead = false; const pt = this.playerOnSeg(c.p, p1), hit = this.enemyOnSeg(c.p, p1, c.owner, pt >= 0 ? pt : 1);
+      if (hit && hit.t <= this.world.trace(c.p, p1, [-3, -3, -3], [3, 3, 3], null, true).fraction) { // friendly fire: a gooey tissue in the face
+        hit.e.hurt(MARV.tissueDamage * INFIGHT.damage, false, c.owner); hit.e.pooT = Math.max(hit.e.pooT || 0, 1.5); this.gooSplat(hit.p, 10); this.sfx.play('goo'); dead = true;
+      } else if (pt >= 0) {
         this.damagePlayer(MARV.tissueDamage); this.gooPlayer(); dead = true;
       } else {
         const tr = this.world.trace(c.p, p1, [-3, -3, -3], [3, 3, 3], null, true);
@@ -933,7 +1066,7 @@ export class Game {
   // a tissue hit: white goo splats over the screen and CornPop is slowed for MARV.slowTime seconds
   gooPlayer() {
     const fresh = this.gooT <= 0; this.gooT = MARV.slowTime; this.input.rumble(0.6, 0.3, 300); this.sfx.play('goo'); this.flash = { rgb: [0.95, 0.95, 0.88], a: 0.45 };
-    this.gooSplat(this.player.eye(), 6); this.portrait.hurt = 0.6; this.emote('angry');
+    this.gooSplat(this.player.eye(), 6); this.portrait.hurt = 0.6; this.body.playEmote('angry'); this.faceReact('pain', 0.9);
     const g = this.gooCanvas.getContext('2d'), W = this.gooCanvas.width, H = this.gooCanvas.height;
     if (fresh) g.clearRect(0, 0, W, H);
     const blob = (x, y, r) => { g.beginPath(); for (let a = 0; a <= 16; a++) { const t = a / 16 * Math.PI * 2, rr = r * (0.75 + Math.random() * 0.45); g.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr); } g.fill(); };
@@ -956,14 +1089,17 @@ export class Game {
     else { U.goo.value = 0; if (this.player.maxspeed) this.player.maxspeed = 0; }
   }
   // ---- Beans' potatoes: thrown projectiles, then bouncing debris that stays on the floor ----
-  spawnPotato(from, v, owner) { const m = makePotato(1); m.position.set(...from); this.scene.add(m); this.potatoes.push({ p: from.slice(), v: v.slice(), mesh: m, t: 0, spin: [Math.random() * 10 - 5, Math.random() * 10 - 5] }); }
+  spawnPotato(from, v, owner) { const m = makePotato(1); m.position.set(...from); this.scene.add(m); this.potatoes.push({ p: from.slice(), v: v.slice(), mesh: m, owner, t: 0, spin: [Math.random() * 10 - 5, Math.random() * 10 - 5] }); }
   updatePotatoes(dt) {
     const pl = this.player, keep = [];
     for (const c of this.potatoes) {
       c.t += dt; c.v[1] -= BEANS.potatoGravity * dt;
       const p1 = [c.p[0] + c.v[0] * dt, c.p[1] + c.v[1] * dt, c.p[2] + c.v[2] * dt];
-      let dead = false;
-      if (!this.playerDead && segAabb(c.p, p1, [pl.pos[0] - 18, pl.pos[1] - 26, pl.pos[2] - 18], [pl.pos[0] + 18, pl.pos[1] + 34, pl.pos[2] + 18]) >= 0) {
+      let dead = false; const pt = this.playerOnSeg(c.p, p1), hit = this.enemyOnSeg(c.p, p1, c.owner, pt >= 0 ? pt : 1);
+      if (hit && hit.t <= this.world.trace(c.p, p1, [-3, -3, -3], [3, 3, 3], null, true).fraction) { // friendly fire
+        hit.e.hurt(BEANS.potatoDamage * INFIGHT.damage, false, c.owner); this.sfx.play('potatoHit'); dead = true;
+        this.scene.remove(c.mesh); this.addDebris(hit.p, [-c.v[0] * 0.2, 80, -c.v[2] * 0.2], 1);
+      } else if (pt >= 0) {
         this.damagePlayer(BEANS.potatoDamage); this.sfx.play('potatoHit'); this.flash = { rgb: [0.7, 0.5, 0.25], a: 0.3 }; dead = true;
         this.scene.remove(c.mesh); this.addDebris(c.p, [-c.v[0] * 0.2, 80, -c.v[2] * 0.2], 1);
       } else {
@@ -978,8 +1114,8 @@ export class Game {
     }
     this.potatoes = keep;
   }
-  addDebris(p, v, s = 1) {
-    const m = makePotato(s); m.position.set(...p); this.scene.add(m);
+  addDebris(p, v, s = 1, make = makePotato) {
+    const m = make(s); m.position.set(...p); this.scene.add(m);
     const L = this.pointLight(p); for (const mt of m.userData.mats) mt.color.multiply(new THREE.Color(Math.max(0.5, L[0]), Math.max(0.5, L[1]), Math.max(0.5, L[2])));
     this.debris.push({ p: p.slice(), v: v.slice(), mesh: m, r: m.userData.r, rest: false, t: 0, spin: [Math.random() * 12 - 6, Math.random() * 12 - 6] });
     if (this.debris.length > 140) { const o = this.debris.shift(); this.scene.remove(o.mesh); }
@@ -1018,7 +1154,10 @@ export class Game {
     const pl = this.player, keep = [];
     for (const f of this.fireballs) {
       f.t += dt; const p1 = [f.p[0] + f.v[0] * dt, f.p[1] + f.v[1] * dt, f.p[2] + f.v[2] * dt]; let dead = false;
-      if (!this.playerDead && segAabb(f.p, p1, [pl.pos[0] - 18, pl.pos[1] - 26, pl.pos[2] - 18], [pl.pos[0] + 18, pl.pos[1] + 34, pl.pos[2] + 18]) >= 0) {
+      const pt = this.playerOnSeg(f.p, p1), hit = this.enemyOnSeg(f.p, p1, f.owner, pt >= 0 ? pt : 1, 2);
+      if (hit && hit.t <= this.world.trace(f.p, p1, [-3, -3, -3], [3, 3, 3], null, true).fraction) { // friendly fire
+        hit.e.hurt(FRENTA.fireDamage * INFIGHT.damage, false, f.owner); this.fireBurst(hit.p, 16); this.sfx.play('fireHit'); dead = true;
+      } else if (pt >= 0) {
         this.damagePlayer(FRENTA.fireDamage, true); this.fireBurst(f.p, 16); this.sfx.play('fireHit'); dead = true;
       } else { const tr = this.world.trace(f.p, p1, [-3, -3, -3], [3, 3, 3], null, true); if (tr.fraction < 1) { this.fireBurst(tr.end, 12); this.sfx.play('fireHit'); dead = true; } }
       if (dead || f.t > 7) { this.scene.remove(f.grp); continue; }
@@ -1144,7 +1283,8 @@ export class Game {
     this.input.rumble(0.35, Math.min(1, n / 12), 140);
     this.lastHurtT = this.time;
     this.health -= n; this.flash = burn ? { rgb: [0.9, 0.35, 0.05], a: 0.28 } : { rgb: [0.9, 0.1, 0.05], a: 0.32 }; this.sfx.play('pain'); this.player.landKick = Math.min(10, this.player.landKick + 4);
-    this.portrait.hurt = 1; if (Math.random() < 0.3) this.emote('angry');
+    this.portrait.hurt = 1; if (Math.random() < 0.3) this.body.playEmote('angry'); // (the status bar face stays put so you can see him wince)
+    this.faceReact(n >= 18 ? 'ouch' : 'pain', n >= 18 ? 0.9 : 0.7);
     if (this.health <= 0) this.killPlayer();
   }
   bossDefeated(b) {
@@ -1156,21 +1296,28 @@ export class Game {
     if (this.director) this.director.cool = 60;
   }
   killPlayer() {
-    this.health = 0; this.playerDead = true; this.deathT = 0; this.sfx.play('die'); this.sfx.spray(false); this.sfx.spin(0); this.sfx.sauce(false);
+    this.health = 0; this.playerDead = true; this.deathT = 0; this.faceReact('dead'); for (const cp of [this.portrait.cp, this.body]) if (cp.face) cp.face.setHealth(0); this.portrait.cp.emote = null; this.portrait.cp.setState('idle', 0.1, true); this.sfx.play('die'); this.sfx.spray(false); this.sfx.spin(0); this.sfx.sauce(false);
     this.flash = { rgb: [0.8, 0.05, 0.02], a: 0.6 };
     this.hud.centerPrint(`CORNPOP GOT CHICKENED!\n\n${this.input.isTouch ? 'TAP' : 'PRESS JUMP'} TO TRY AGAIN`, 9999);
-    for (const e of this.enemies) if (e.alive && e.awake) { e.state = 'taunt'; e.model.playEmote('taunt'); }
+    for (const e of this.enemies) if (e.alive && e.awake && !e.boojo && !e.foe) { e.state = 'taunt'; e.model.playEmote('taunt'); }
   }
 
-  setupRain(r) {
-    this.rain = null; if (!r) return;
-    if (!r.min) { const W = this.world; r = { ...r, min: [0, -1024, 0], max: [W.W * CELL, r.top || 1400, W.H * CELL] }; }
-    const N = r.density || 700, pos = new Float32Array(N * 6);
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x8890b0, transparent: true, opacity: 0.55, fog: true }));
-    lines.frustumCulled = false; this.scene.add(lines);
-    const drops = []; for (let i = 0; i < N; i++) drops.push([0, 0, 0, 0, 0]);
-    this.rain = { r, lines, drops, pos, init: false, wind: r.wind || [0, 0] };
+  // weather particles. def.rain is one effect or a list: rain (default), blood rain ({ blood: true }), falling ash ({ kind: 'ash' })
+  // and embers drifting up ({ kind: 'embers' }). Only real rain wets the ground and makes the rain sound.
+  setupRain(list) {
+    this.rain = null; this.rains = []; if (!list) return;
+    for (let r of [].concat(list)) {
+      const W = this.world; if (!r.min) r = { ...r, min: [0, -1024, 0], max: [W.W * CELL, r.top || 1400, W.H * CELL] };
+      if (r.blood) r = { color: [0.62, 0.03, 0.03], splash: [0.6, 0.02, 0.02], opacity: 0.8, wetTint: [1.0, 0.42, 0.38], ...r };
+      if (r.kind === 'ash') r = { color: [0.62, 0.6, 0.58], opacity: 0.85, speed: [45, 110], len: 2.5, splash: false, quiet: true, dry: true, ...r };
+      if (r.kind === 'embers') r = { color: [1, 0.5, 0.12], opacity: 0.95, speed: [50, 130], len: 3, splash: false, quiet: true, dry: true, rise: true, glow: true, ...r };
+      const N = r.density || 700, pos = new Float32Array(N * 6), c = r.color || [0.53, 0.56, 0.69];
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(c[0], c[1], c[2]), transparent: true, opacity: r.opacity ?? 0.55, fog: !r.glow, blending: r.glow ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false }));
+      lines.frustumCulled = false; this.scene.add(lines);
+      const drops = []; for (let i = 0; i < N; i++) drops.push([0, 0, 0, 0, 0]);
+      const R = { r, lines, drops, pos, init: false, wind: r.wind || [0, 0] }; this.rains.push(R); if (!r.dry && !this.rain) this.rain = R;
+    }
   }
   // ---- lightning storm: random strikes light up everything open to the sky, a bolt in the skyline, thunder a moment later ----
   updateStorm(dt) {
@@ -1184,31 +1331,36 @@ export class Game {
       const delay = 0.25 + Math.random() * 2.4; const loud = Math.max(0.35, 1 - delay / 3) * S.power;
       setTimeout(() => { if (this.storm === S) this.sfx.thunder(loud, delay < 0.7); }, delay * 1000);
       const open = this.world.expCov ? this.world.exposureAt([pl.pos[0], pl.pos[1] + 20, pl.pos[2]]) : 1;
-      if (open > 0.3 && delay < 1.2) this.flash = { rgb: [0.85, 0.9, 1], a: 0.16 * S.power };
+      if (open > 0.3 && delay < 1.2) this.flash = { rgb: c.color || [0.85, 0.9, 1], a: 0.16 * S.power };
     }
     let env = 0; for (const [t0, a] of S.pulses) if (S.t >= t0) env = Math.max(env, a * Math.exp(-(S.t - t0) * 11));
     env *= S.power;
     U.lightning.value = env; U.storm.value = env; U.bolt.value = S.t < 0.4 ? env : 0;
-    const f = this.baseFog; U.fogColor.value.setRGB(f[0] + env * 0.05, f[1] + env * 0.055, f[2] + env * 0.07); if (this.scene.fog) this.scene.fog.color.copy(U.fogColor.value);
+    const f = this.baseFog, lc = U.lightCol.value; U.fogColor.value.setRGB(f[0] + env * 0.066 * lc.r, f[1] + env * 0.068 * lc.g, f[2] + env * 0.07 * lc.b); if (this.scene.fog) this.scene.fog.color.copy(U.fogColor.value);
     if (this.bodyAmb) this.bodyAmb.intensity = 0.15 + env * 1.4;
   }
   updateRain(dt) {
     this.updateStorm(dt);
-    const R = this.rain; if (!R) return; const p = this.player.pos, r = R.r, W = this.world;
+    if (!this.rain && this.sfx.setRain) this.sfx.setRain(0);
+    for (const R of this.rains || []) this.updateRainOne(R, dt);
+  }
+  updateRainOne(R, dt) {
+    const p = this.player.pos, r = R.r, W = this.world;
     const inside = p[0] > r.min[0] - 200 && p[0] < r.max[0] + 200 && p[2] > r.min[2] - 200 && p[2] < r.max[2] + 200;
     R.lines.visible = inside;
     const dist = Math.max(0, Math.max(r.min[0] - p[0], p[0] - r.max[0], r.min[2] - p[2], p[2] - r.max[2]));
     // rain loudness: how much open sky is around CornPop (quieter indoors, loud in the street)
     let near = 1; if (W.exposed) { let n = 0, k = 0; const c0 = Math.floor(p[0] / CELL), r0 = Math.floor(p[2] / CELL); for (let dr = -3; dr <= 3; dr += 2) for (let dc = -3; dc <= 3; dc += 2) { const c = c0 + dc, rr = r0 + dr; k++; if (c >= 0 && rr >= 0 && c < W.W && rr < W.H && W.exposed[rr * W.W + c]) n++; } near = 0.25 + 0.75 * n / k; }
-    this.sfx.setRain(Math.max(0, 1 - dist / 500) * near * (r.loud || 1));
+    if (!r.quiet) this.sfx.setRain(Math.max(0, 1 - dist / 500) * near * (r.loud || 1));
     if (!inside) return;
+    const sp = r.speed || [750, 1000], len = r.len || 16, rise = !!r.rise;
     const rnd = (a, b) => a + Math.random() * (b - a), wx = R.wind[0], wz = R.wind[1];
     const open = (x, z) => { if (!W.exposed) return 0; const c = Math.floor(x / CELL), rr = Math.floor(z / CELL); if (c < 0 || rr < 0 || c >= W.W || rr >= W.H || !W.exposed[rr * W.W + c]) return null; const e = W.cells[rr][c]; return e.roof ?? e.f; };
     for (let i = 0; i < R.drops.length; i++) {
       const d = R.drops[i];
-      if (!R.init || d[1] < d[4] || Math.abs(d[0] - p[0]) > 520 || Math.abs(d[2] - p[2]) > 520) {
-        if (R.init && d[1] < d[4] && d[4] > -1000 && Math.abs(d[0] - p[0]) < 360 && Math.abs(d[2] - p[2]) < 360 && Math.random() < 0.6) { // splash
-          for (let k = 0; k < 2; k++) this.particles.spawn([d[0], d[4] + 1, d[2]], [(Math.random() - 0.5) * 50, 40 + Math.random() * 40, (Math.random() - 0.5) * 50], [0.55, 0.6, 0.7], 0.22, 500);
+      if (!R.init || (rise ? d[1] > d[4] + 520 : d[1] < d[4]) || Math.abs(d[0] - p[0]) > 520 || Math.abs(d[2] - p[2]) > 520) {
+        if (R.init && r.splash !== false && d[1] < d[4] && d[4] > -1000 && Math.abs(d[0] - p[0]) < 360 && Math.abs(d[2] - p[2]) < 360 && Math.random() < 0.6) { // splash
+          for (let k = 0; k < 2; k++) this.particles.spawn([d[0], d[4] + 1, d[2]], [(Math.random() - 0.5) * 50, 40 + Math.random() * 40, (Math.random() - 0.5) * 50], r.splash || [0.55, 0.6, 0.7], 0.22, 500);
         }
         let ok = false;
         for (let tries = 0; tries < 4 && !ok; tries++) {
@@ -1216,10 +1368,11 @@ export class Game {
           const f = W.exposed ? open(d[0], d[2]) : r.min[1]; if (f !== null) { d[4] = f; ok = true; }
         }
         if (!ok) { d[4] = -9999; d[1] = -9000; continue; }
-        const top = Math.min(r.max[1], p[1] + 500); d[3] = rnd(750, 1000); d[1] = R.init ? top : rnd(d[4], top);
+        const top = Math.min(r.max[1], p[1] + 500); d[3] = rnd(sp[0], sp[1]); d[1] = rise ? (R.init ? d[4] + rnd(0, 30) : rnd(d[4], d[4] + 500)) : R.init ? top : rnd(d[4], top);
       }
-      d[1] -= d[3] * dt; d[0] += wx * dt; d[2] += wz * dt;
-      const k = 16 / d[3], o = i * 6; R.pos[o] = d[0]; R.pos[o + 1] = d[1]; R.pos[o + 2] = d[2]; R.pos[o + 3] = d[0] - wx * k + 0.8; R.pos[o + 4] = d[1] + 16; R.pos[o + 5] = d[2] - wz * k + 0.3;
+      d[1] -= (rise ? -d[3] : d[3]) * dt; d[0] += wx * dt; d[2] += wz * dt;
+      if (len < 8) { d[0] += Math.sin(this.time * 1.3 + i) * 14 * dt; d[2] += Math.cos(this.time * 1.1 + i * 1.7) * 14 * dt; } // ash and embers drift about
+      const k = len / d[3], o = i * 6; R.pos[o] = d[0]; R.pos[o + 1] = d[1]; R.pos[o + 2] = d[2]; R.pos[o + 3] = d[0] - wx * k + (len < 8 ? 1.6 : 0.8); R.pos[o + 4] = d[1] + len; R.pos[o + 5] = d[2] - wz * k + 0.3;
     }
     R.init = true; R.lines.geometry.attributes.position.needsUpdate = true;
   }
@@ -1281,6 +1434,8 @@ export class Game {
     if (b.wave) { const w = this.waves.get(b.wave); if (w) this.startWave(w); }
     if (b.msg) this.message(b.msg);
   }
+  // CornPop's face (status bar portrait and body): 'pain', 'ouch', 'evil' (devious grin), 'happy', 'dead', 'neutral'
+  faceReact(expr, t = 1) { for (const cp of [this.portrait.cp, this.body]) if (cp.face) cp.face.set(expr, t); }
   emote(kind) {
     const map = { happy: 'happy', angry: 'angry', bow: 'bow', funky: 'funky' };
     this.portrait.cp.playEmote(map[kind]); this.body.playEmote(map[kind]);
@@ -1297,16 +1452,16 @@ export class Game {
           if (this.arsenal.isItem(e.type)) { if (!this.arsenal.pickup(e)) continue; }
           else if (e.type === 'soaker') {
             const had = this.hasSoaker; this.hasSoaker = true; this.ammo = Math.min(SOAKER.maxAmmo, this.ammo + SOAKER.startAmmo); this.soaker.raise = 1; if (!had) this.setWeapon('soaker', true);
-            this.message(had ? 'More juice for the Super Soaker!' : 'You got the SUPER SOAKER!\nHold FIRE to spray acid juice'); this.sfx.play('weapon'); this.bonusFlash([1, 0.9, 0.2], 0.4); this.emote('happy');
+            this.message(had ? 'More juice for the Super Soaker!' : 'You got the SUPER SOAKER!\nHold FIRE to spray acid juice'); this.sfx.play('weapon'); this.faceReact('evil', 2.6); this.bonusFlash([1, 0.9, 0.2], 0.4); this.emote('happy');
           } else if (e.type === 'shotgun') {
             const had = this.hasShotgun; this.hasShotgun = true; this.sausages = Math.min(SHOTGUN.maxAmmo, this.sausages + SHOTGUN.pickupAmmo); this.setWeapon('shotgun', true);
-            this.message(had ? 'More sausages!' : 'You got the DOUBLE-BARREL SAUSAGE SHOTGUN!\nTwo sausages a shot. Get up close!\nSwitch weapons with 1 / 2 / Q or the WEAPON button'); this.sfx.play('weapon'); this.bonusFlash([0.9, 0.5, 0.25], 0.4); this.emote('funky');
+            this.message(had ? 'More sausages!' : 'You got the DOUBLE-BARREL SAUSAGE SHOTGUN!\nTwo sausages a shot. Get up close!\nSwitch weapons with 1 / 2 / Q or the WEAPON button'); this.sfx.play('weapon'); this.faceReact('evil', 2.6); this.bonusFlash([0.9, 0.5, 0.25], 0.4); this.emote('funky');
           } else if (e.type === 'candygun') {
             const had = this.hasCandy; this.hasCandy = true; this.candy = Math.min(CANDYGUN.maxAmmo, this.candy + CANDYGUN.pickupAmmo); this.setWeapon('candygun', true);
-            this.message(had ? 'More candy corn!' : 'You got the CC-9000 CANDY CORN MACHINE GUN!\nHold FIRE: the barrels spin up, then it sprays candy corn\nWeapon 3 (or Q / the WEAPON button)'); this.sfx.play('weapon'); this.bonusFlash([1, 0.75, 0.2], 0.4); this.emote('funky');
+            this.message(had ? 'More candy corn!' : 'You got the CC-9000 CANDY CORN MACHINE GUN!\nHold FIRE: the barrels spin up, then it sprays candy corn\nWeapon 3 (or Q / the WEAPON button)'); this.sfx.play('weapon'); this.faceReact('evil', 2.6); this.bonusFlash([1, 0.75, 0.2], 0.4); this.emote('funky');
           } else if (e.type === 'turdgun') {
             const had = this.hasTurd; this.hasTurd = true; this.turds = Math.min(TURD.maxAmmo, this.turds + TURD.pickupAmmo); this.setWeapon('turd', true);
-            this.message(had ? 'More turds!' : 'You got the TURD LAUNCHER!\nRockets of poo: big splash damage and a coat of brown goo\nWeapon 4 - keep your distance!'); this.sfx.play('weapon'); this.bonusFlash([0.6, 0.4, 0.2], 0.4); this.emote('funky');
+            this.message(had ? 'More turds!' : 'You got the TURD LAUNCHER!\nRockets of poo: big splash damage and a coat of brown goo\nWeapon 4 - keep your distance!'); this.sfx.play('weapon'); this.faceReact('evil', 2.6); this.bonusFlash([0.6, 0.4, 0.2], 0.4); this.emote('funky');
           } else if (e.type === 'turdbox') {
             if (this.turds >= TURD.maxAmmo) continue;
             const n = e.amount || TURD.boxAmmo; this.turds = Math.min(TURD.maxAmmo, this.turds + n); this.hud.print(`You got a box of turds (+${n})`); this.sfx.play('ammo'); this.bonusFlash([0.6, 0.4, 0.2], 0.2);
@@ -1338,13 +1493,13 @@ export class Game {
         const ip = [e.pos[0], e.base - 10, e.pos[2]];
         if (this.overlap(p, [ip[0] - 16, ip[1] - 16, ip[2] - 16], [ip[0] + 16, ip[1] + 24, ip[2] + 16])) {
           e.dead = true; this.scene.remove(e.mesh);
-          if (e.type === 'key') { this.keys.add(e.color); this.message(`You got the ${e.color.toUpperCase()} keycard!`); this.sfx.play('key'); this.bonusFlash(new THREE.Color(KEY_COLORS[e.color][0]).toArray(), 0.35); this.emote('happy'); this.portrait.flash = 1; }
+          if (e.type === 'key') { this.keys.add(e.color); this.message(`You got the ${e.color.toUpperCase()} keycard!`); this.sfx.play('key'); this.bonusFlash(new THREE.Color(KEY_COLORS[e.color][0]).toArray(), 0.35); this.emote('happy'); this.faceReact('happy', 1.6); this.portrait.flash = 1; }
           else { this.slices++; this.health = Math.min(100, this.health + 5); this.hud.print(this.slices === this.slicesTotal ? 'You found every pizza slice!' : 'You got a pizza slice (+5 health)'); this.sfx.play('slice'); this.bonusFlash([0.9, 0.65, 0.2], 0.22); this.portrait.flash = 0.5; if (this.slices === this.slicesTotal) this.emote('funky'); }
         }
       } else if (e.type === 'message' || e.type === 'secret') {
         if (this.overlap(p, e.min, e.max)) {
           e.dead = true;
-          if (e.type === 'secret') { this.secrets++; this.message('You found a secret area!'); this.sfx.play('secret'); this.emote('funky'); }
+          if (e.type === 'secret') { this.secrets++; this.message('You found a secret area!'); this.sfx.play('secret'); this.emote('funky'); this.faceReact('happy', 1.8); }
           else { this.message(e.msg, true); this.sfx.play('talk'); }
         }
       } else if (e.type === 'button') {
@@ -1440,6 +1595,7 @@ export class Game {
     const turn = Math.max(-1, Math.min(1, cmd.dyaw / 6 + cmd.side * 0.6));
     this.portrait.update(dt, -turn * 0.6, Math.max(-0.4, Math.min(0.4, -pl.pitch * 0.35)));
     this.portrait.cp.drive(pl.speed, pl.onground);
+    for (const cp of [this.portrait.cp, this.body]) if (cp.face) cp.face.setHealth(this.health);
     this.body.drive(pl.speed, pl.onground);
     this.body.update(dt);
     if (this.flash) { this.flash.a -= dt * 0.9; if (this.flash.a <= 0) this.flash = null; }
@@ -1481,7 +1637,7 @@ export class Game {
     for (const e of this.enemies) this.safe('enemy ' + (e.kind || ''), () => e.update(dt));
     this.updateTissues(dt); this.updateSausages(dt); this.updateCandy(dt); this.updateFarts(dt); this.updateTurds(dt); this.updateFireballs(dt); this.updatePotatoes(dt); this.updateDebris(dt); this.arsenal.updateWorld(dt); this.updateGoo(dt); this.sfx.spin(0);
     this.updateChickens(dt); this.updateDroplets(dt); this.particles.update(dt); this.updatePuddles(dt);
-    this.portrait.update(dt, 0, 0.3); this.portrait.scene.background.setRGB(0.5, 0.05, 0.03);
+    this.portrait.update(dt, 0, 0.12); this.portrait.scene.background.setRGB(0.5, 0.05, 0.03);
     if (this.flash) { this.flash.a = Math.max(0.25, this.flash.a - dt * 0.4); }
     if (this.deathT > 1.2 && (cmd.jump || this.input.consume('KeyE') || this.tapped)) { this.tapped = false; this.hud.center = null; this.flash = null; this.onRestart && this.onRestart(this.levelIndex); }
     this.tapped = false;
@@ -1541,7 +1697,7 @@ export class Game {
       this.blitMat.uniforms.bloomAmt.value = 0.6;
     } else this.blitMat.uniforms.bloomAmt.value = 0;
     R.setRenderTarget(null);
-    { const U = this.blitMat.uniforms; U.ssr.value = this.shared.wetOn.value && this.opts.reflect !== false ? 1 : 0;
+    { const U = this.blitMat.uniforms; U.ssr.value = (this.shared.wetOn.value || this.level?.gloss) && this.opts.reflect !== false ? 1 : 0;
       if (U.ssr.value) { cam.updateMatrixWorld(); U.proj.value.copy(cam.projectionMatrix); U.invProj.value.copy(cam.projectionMatrixInverse); U.invView.value.copy(cam.matrixWorld);
         const vm = cam.matrixWorldInverse; U.upV.value.set(0, 1, 0).transformDirection(vm); U.xV.value.set(1, 0, 0).transformDirection(vm); U.zV.value.set(0, 0, 1).transformDirection(vm);
         const fc = this.shared.fogColor.value, L = this.shared.lightning.value; U.reflSky.value.setRGB(fc.r * 1.6 + 0.012 + L * 0.5, fc.g * 1.6 + 0.012 + L * 0.55, fc.b * 1.6 + 0.02 + L * 0.7);

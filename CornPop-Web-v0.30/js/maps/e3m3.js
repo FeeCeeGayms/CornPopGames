@@ -3,9 +3,11 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M3', title: 'E3M3: THE PIZZA VAULTS', ambience: 'cave', music: 'assets/music/e1m3.mp3', ambient: 18,
+  name: 'E3M3', title: 'E3M3: THE PIZZA VAULTS', ambience: 'cave', music: 'assets/music/e1m3.mp3', ambient: 40,
   fog: { color: [0.025, 0.03, 0.04], density: 0.00035 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [0.35, 0.6, 1], pattern: 'gentle' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.2, 0.08], pattern: 'pulse' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 112, 104, 'concretedark', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const DOCK = { f: 0, c: 224, floor: 'grate', ceil: 'steeldark', side: 'trim', upper: 'rustpanel' };
@@ -129,4 +131,6 @@ export default makeLevel({
   K.exit(X(4), 0, Z(26), 'px');
 
   K.goal(X(44), Z(55), 160); K.goal(X(80), Z(68), 128); K.goal(X(57), Z(28), 0, { wait: 12 });
+
+  K.ruins({'seed': 3123, 'mode': 'bunker', 'theme': 'bunker', 'big': 30, 'lights': 30});
 });

@@ -5,10 +5,12 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M7', title: 'E3M7: HORNT JAIL', ambience: 'cave', music: 'assets/music/e1m7.mp3', ambient: 16,
+  name: 'E3M7', title: 'E3M7: HORNT JAIL', ambience: 'cave', music: 'assets/music/e1m7.mp3', ambient: 38,
   fog: { color: [0.03, 0.03, 0.035], density: 0.00034 },
   rain: { min: [640, 0, 128], max: [2912, 448, 1312] },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'flicker' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 112, 104, 'jailmetal', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const INT = { f: 0, c: 192, floor: 'jailfloor', ceil: 'jaildark', side: 'trim', upper: 'jailmetal' };
@@ -166,4 +168,6 @@ export default makeLevel({
   K.exit(X(10) + 16, 0, Z(1), 'pz');
 
   K.goal(X(88) + 24, Z(88) + 12, 0); K.goal(X(101), Z(53), 136, { wait: 14 }); K.goal(X(12), Z(67), 0); K.goal(X(10), Z(42), 0, { wait: 10 }); K.goal(X(82), Z(10), 168, { wait: 12 }); K.goal(X(10), Z(20), 0, { wait: 12 });
+
+  K.ruins({'seed': 3287, 'mode': 'bunker', 'theme': 'bunker', 'big': 22, 'lights': 30});
 });

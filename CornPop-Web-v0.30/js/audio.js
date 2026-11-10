@@ -133,6 +133,11 @@ export class Sfx {
       case 'shotgun': this.noise(0.5, 800, 0.8, 0.7, 0, 'lowpass', 100); this.tone('square', 70, 35, 0.3, 0.4); this.noise(0.1, 4500, 1, 0.3, 0, 'highpass'); this.noise(0.2, 1500, 2.5, 0.15, 0.4, 'bandpass'); this.tone('square', 280, 0, 0.06, 0.1, 0.48); this.tone('square', 200, 0, 0.07, 0.1, 0.6); break;
       case 'turdLaunch': this.noise(0.45, 250, 0.8, 0.5, 0, 'lowpass', 800); this.tone('sine', 80, 40, 0.4, 0.35); this.noise(0.3, 1400, 2.5, 0.15, 0.08, 'bandpass', 400); this.tone('sawtooth', 120, 60, 0.25, 0.1, 0.1); break;
       case 'candyShot': this.noise(0.05, 2000, 2.5, 0.2, 0, 'bandpass', 800); this.tone('square', 600, 300, 0.04, 0.06); this.tone('triangle', 1200, 800, 0.03, 0.03, 0.02); break;
+      case 'boojoSight': this.tone('triangle', 480, 900, 0.18, 0.16); this.tone('triangle', 540, 1000, 0.2, 0.16, 0.17); this.tone('sawtooth', 600, 1400, 0.4, 0.1, 0.36); break; // wah-wah-WAAAH!
+      case 'boojoPanic': this.tone('triangle', 700, 1150, 0.16, 0.12); this.tone('triangle', 1150, 640, 0.22, 0.12, 0.15); break;
+      case 'boojoPain': this.tone('square', 950, 520, 0.16, 0.12); break;
+      case 'boojoDeath': this.tone('triangle', 1100, 220, 0.35, 0.15); break;
+      case 'boojoPop': this.noise(0.35, 700, 1, 0.4); this.tone('sine', 320, 70, 0.3, 0.3); this.noise(0.3, 2600, 2, 0.16, 0.04, 'bandpass'); this.tone('square', 1300, 0, 0.05, 0.06, 0.08); break; // crunch
       case 'ballinkiSight': this.tone('square', 520, 820, 0.12, 0.12); this.tone('square', 660, 980, 0.12, 0.1, 0.13); this.tone('square', 560, 900, 0.14, 0.1, 0.26); break;
       case 'ballinkiPain': this.tone('square', 700, 420, 0.15, 0.14); break;
       case 'ballinkiDeath': this.tone('square', 600, 120, 0.7, 0.16); this.noise(0.4, 300, 1, 0.12, 0.2); break;

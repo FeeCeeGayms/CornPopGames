@@ -1,6 +1,7 @@
 // Level kit: high-level building blocks for big, Arcane-Dimensions-style maps on the 32-unit grid.
 // A level is written as one function that paints the grid (floors/ceilings per cell) and queues
 // decoration/entities ("post" steps) that run once the world exists.
+import { ruinify } from './ruins.js';
 const S = 32;
 const POOL_START = 0x100;
 
@@ -317,6 +318,9 @@ export function makeLevel(meta, w, h, defaultSolidTex, fn) {
   });
   // simple light strip down the middle of a hall (Doom LITE textures)
   K.strip = (x0, z0, x1, z1, y, step = 192, color = [1, 0.95, 0.85], light = 300) => { const alongX = Math.abs(x1 - x0) >= Math.abs(z1 - z0); const n = Math.max(1, Math.round(Math.hypot(x1 - x0, z1 - z0) / step)); for (let i = 0; i <= n; i++) { const t = n ? i / n : 0.5; K.fixture(x0 + (x1 - x0) * t, z0 + (z1 - z0) * t, y, 64, alongX ? 'x' : 'z', 'light', light, color); } };
+
+  // Crypt of Hornt: fill the finished map with ruins and evil architecture (ruins.js). Call it last.
+  K.ruins = (o = {}) => post(ctx => ruinify({ ...ctx, goals }, o));
 
   fn(K);
   const map = g.map(row => row.join(''));

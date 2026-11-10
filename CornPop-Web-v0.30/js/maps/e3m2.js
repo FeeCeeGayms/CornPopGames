@@ -3,9 +3,11 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M2', title: 'E3M2: JUSTICE HALL', music: 'assets/music/cornquake_e1m2.mp3', ambience: 'cave', ambient: 18,
+  name: 'E3M2', title: 'E3M2: JUSTICE HALL', music: 'assets/music/cornquake_e1m2.mp3', ambience: 'cave', ambient: 40,
   fog: { color: [0.03, 0.03, 0.035], density: 0.0004 },
   styles: [{ color: [1, 0.5, 0.15], pattern: 'candle' }, { color: [0.35, 0.6, 1], pattern: 'gentle' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.15, 0.08], pattern: 'pulse' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 110, 96, 'concretedark', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const TUN = { f: 0, c: 176, floor: 'grate', ceil: 'steeldark', side: 'trim', upper: 'rustpanel' };
@@ -140,4 +142,6 @@ export default makeLevel({
   K.goal(X(96), Z(57), 0, { shoot: [X(107) - 3, 64, Z(57) + 16] });
   K.goal(X(103), Z(38) + 16);
   K.goal(X(54), Z(21), 0, { wait: 14 });
+
+  K.ruins({'seed': 3082, 'mode': 'bunker', 'theme': 'bunker', 'big': 30, 'lights': 30});
 });

@@ -5,8 +5,12 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M5', title: 'E1M5: GREASE TUNNELS', ambience: 'cave', ambient: 16, music: 'assets/music/e1m5.mp3',
-  fog: { color: [0.03, 0.05, 0.03], density: 0.00035 }, skyTint: [0.55, 0.75, 0.45],
-  styles: [{ color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.3], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.05, 0.04, 0.07], density: 0.00038 }, skyTint: [0.55, 0.75, 0.45],
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.3], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], outTint: [0.8, 0.72, 1], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'ruindark', 'mossstone': 'ruinwall2', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'deadgrass', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
+  sky: {'hell': 1, 'a': [0.02, 0.012, 0.04], 'b': [0.42, 0.22, 0.58], 'glow': [0.2, 0.08, 0.3], 'orb': {'kind': 'moon', 'az': 0.3, 'el': 1.0, 'color': [0.92, 0.88, 0.74]}, 'silh': 'ruins'},
+  rain: { density: 800, wind: [-18, 12], color: [0.5, 0.45, 0.62] }, mist: { color: [0.2, 0.16, 0.26], density: 0.003 },
 }, 112, 86, 'slimewall', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const STAT = { f: 0, c: 160, floor: 'techfloor', ceil: 'ceil', side: 'stepside', upper: 'techgreen' };
@@ -73,7 +77,7 @@ export default makeLevel({
   K.room(82, 10, 108, 50, MACH, 'techgray');
   K.paint(84, 40, 97, 46, T(MID)); K.paint(98, 40, 108, 50, T(BAL));
   K.liftCells(84, 37, 86, 39, 0, 80); K.liftCells(96, 41, 97, 43, 80, 160);
-  K.brush([X(87), 80, Z(40)], [X(96), 114, Z(40) + 2], { tex: 'railing', fit: true, noshadow: true }); K.brush([X(84), 80, Z(46) + 30], [X(98), 114, Z(47)], { tex: 'railing', fit: true, noshadow: true });
+  K.brush([X(87), 80, Z(40)], [X(98), 114, Z(40) + 2], { tex: 'railing', fit: true, noshadow: true }); K.brush([X(84), 80, Z(46) + 30], [X(98), 114, Z(47)], { tex: 'railing', fit: true, noshadow: true });
   K.brush([X(98), 160, Z(40)], [X(108) + 32, 194, Z(40) + 2], { tex: 'railing', fit: true, noshadow: true });
   K.key('red', X(106), Z(48), 160); K.light(X(106), 220, Z(47), 260, [1, 0.3, 0.2]);
   for (const [c, r] of [[88, 16], [96, 16], [104, 16], [88, 26], [104, 28]]) K.props((pr, ctx) => { pr.cylinder(C(c), 0, C(r), 46, 220, 'rust', { segs: 16 }); pr.cylinder(C(c), 220, C(r), 20, 100, 'pipes', { segs: 12 }); ctx.brush([X(c) - 30, 0, Z(r) - 30], [X(c) + 62, 220, Z(r) + 62], { invisible: true, noshadow: true }); ctx.light(C(c), 60, C(r) + 70, 220, [0.5, 1, 0.4], 2); });
@@ -101,4 +105,6 @@ export default makeLevel({
   K.light(X(96), 200, Z(75), 800, [0.75, 0.85, 0.7]); K.slices([[X(85), Z(81)], [X(107), Z(69)]]); K.health(X(85), Z(69));
 
   K.goal(X(57), Z(23) + 16, 144); K.goal(X(106), Z(48), 160);
+
+  K.ruins({ seed: 1185, theme: 'ruin', big: 26 });
 });

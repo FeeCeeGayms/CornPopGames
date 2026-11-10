@@ -4,8 +4,12 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M7', title: 'E1M7: DEAD SIMPLE SLICE', ambience: 'street', ambient: 24, music: 'assets/music/e1m7.mp3',
-  fog: { color: [0.09, 0.06, 0.05], density: 0.0002 }, skyTint: [1, 0.5, 0.3],
-  styles: [{ color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.1, 0.035, 0.03], density: 0.00022 }, skyTint: [1, 0.5, 0.3],
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], outTint: [1, 0.5, 0.42], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'ruindark', 'mossstone': 'ruinwall2', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'bloodsoil', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
+  sky: {'hell': 1, 'a': [0.045, 0.0, 0.005], 'b': [0.8, 0.07, 0.04], 'glow': [0.6, 0.12, 0.04], 'orb': {'kind': 'sun', 'az': 0.5, 'el': 1.1, 'color': [1, 0.2, 0.08]}, 'silh': 'ruins'},
+  rain: { blood: true, density: 900, wind: [26, 16] }, storm: { every: [9, 18], power: 0.9, color: [1, 0.2, 0.12] },
 }, 72, 70, 'bigbrown', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const START = { f: 0, c: 128, floor: 'tilebrown', ceil: 'ceil', side: 'stepside', upper: 'bigbrown' };
@@ -66,4 +70,6 @@ export default makeLevel({
 
   for (const [c, r] of [[14, 34], [20, 18], [36, 12], [52, 18], [58, 34], [52, 50], [36, 56], [20, 50], [14, 34], [36, 12], [36, 56]]) K.goal(X(c), Z(r), 0, { wait: 12 });
   K.goal(X(36), Z(26), 0, { wait: 25 }); K.goal(X(30), Z(42), 0, { wait: 15 });
+
+  K.ruins({ seed: 1259, theme: 'blood', big: 12 });
 });

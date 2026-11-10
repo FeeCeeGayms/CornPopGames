@@ -5,8 +5,10 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M8', title: 'E1M8: TRICKS AND TOPPINGS', ambience: 'cave', ambient: 12, music: 'assets/music/e1m8.mp3',
-  fog: { color: [0.04, 0.03, 0.04], density: 0.00035 },
-  styles: [{ color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.045, 0.025, 0.045], density: 0.00035 },
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruindark', 'techgray': 'obsidian', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'bloodwall', 'bigbrown': 'bloodwall', 'graystone': 'ruindark', 'mossstone': 'ruinwall2', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'ashground', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
 }, 104, 100, 'techtan', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const HUB = { f: 0, c: 256, floor: 'checker', ceil: 'ceil', side: 'stepside', upper: 'techtan' };
@@ -115,4 +117,6 @@ export default makeLevel({
   for (const [c, r] of [[45, 90], [59, 90], [52, 93], [38, 76], [66, 76], [52, 84], [40, 92], [64, 92]]) K.qoqC(c, r, 180, { wave: 'final2', y: undefined });
 
   K.goal(X(39) + 16, Z(9) + 16, 0); K.goal(X(80), Z(50), 0, { wait: 20 }); K.goal(X(94) + 16, Z(50) + 16, 24); K.goal(X(9) + 16, Z(50) + 16, 64); K.goal(X(52), Z(74), 0, { wait: 40 });
+
+  K.ruins({ seed: 1296, theme: 'hell', big: 26 });
 });

@@ -5,8 +5,12 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M6', title: 'E1M6: THE DOUGH CRUSHER', ambience: 'cave', ambient: 13, music: 'assets/music/e1m6.mp3',
-  fog: { color: [0.035, 0.035, 0.045], density: 0.0003 }, skyTint: [0.6, 0.5, 0.75],
-  styles: [{ color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.06, 0.03, 0.02], density: 0.00032 }, skyTint: [0.6, 0.5, 0.75],
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], outTint: [1, 0.66, 0.42], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagdark', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagdark', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'hellrock', 'mossstone': 'hellrock', 'slimewall': 'ruinwall2', 'brickred': 'bloodwall', 'dirt': 'ashground', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
+  sky: {'hell': 1, 'a': [0.035, 0.012, 0.0], 'b': [0.95, 0.42, 0.06], 'glow': [0.8, 0.3, 0.05], 'orb': {'kind': 'eye', 'az': 1.6, 'el': 1.05, 'color': [1, 0.4, 0.08]}, 'silh': 'volcano'},
+  rain: [{ kind: 'embers', density: 420, wind: [10, -6] }, { kind: 'ash', density: 300, wind: [10, -6] }], mist: { color: [0.3, 0.1, 0.03], density: 0.0012, top: -40, range: 260 },
 }, 100, 96, 'techgray', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const DECK = { f: 128, c: 256, floor: 'techfloor', ceil: 'ceil', side: 'stepside', upper: 'techgray' };
@@ -107,4 +111,6 @@ export default makeLevel({
   for (const [c, r] of [[16, 76], [28, 76], [22, 70], [22, 88]]) K.qoqC(c, r, 0, { wave: 'vault' });
 
   K.goal(X(85) + 16, Z(55), 192); K.goal(X(51) + 16, Z(7) + 16, 192);
+
+  K.ruins({ seed: 1222, theme: 'iron', big: 24 });
 });

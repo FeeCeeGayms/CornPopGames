@@ -5,8 +5,12 @@ import { makeLevel } from '../kit.js';
 
 export default makeLevel({
   name: 'E1M2', title: 'E1M2: SAUCE UNDERHALLS', ambience: 'cave', ambient: 14, music: 'assets/music/cornquake_e1m2.mp3',
-  fog: { color: [0.03, 0.045, 0.03], density: 0.0004 }, skyTint: [0.5, 0.65, 0.5],
-  styles: [{ color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [0.4, 1, 0.3], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  fog: { color: [0.03, 0.05, 0.025], density: 0.0004 }, skyTint: [0.5, 0.65, 0.5],
+  styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.3], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
+  // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
+  lightTint: [1, 0.84, 0.7], outTint: [0.62, 1, 0.6], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'bloodwall', 'graystone': 'ruindark', 'mossstone': 'ruinwall2', 'slimewall': 'bonewall', 'brickred': 'bloodwall', 'dirt': 'ashground', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
+  sky: {'hell': 1, 'a': [0.012, 0.035, 0.015], 'b': [0.32, 0.62, 0.14], 'glow': [0.1, 0.3, 0.05], 'orb': {'kind': 'eye', 'az': 2.4, 'el': 1.0, 'color': [0.55, 1, 0.2]}, 'silh': 'ruins'},
+  rain: { density: 500, wind: [20, -10], color: [0.4, 0.62, 0.3], splash: [0.35, 0.6, 0.25], wetTint: [0.75, 1, 0.7] }, mist: { color: [0.1, 0.22, 0.08], density: 0.0022 },
 }, 96, 90, 'slimewall', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const SHAFT = { f: 0, c: 160, floor: 'grate', ceil: 'steeldark', side: 'stepside', upper: 'rustpanel' };
@@ -118,4 +122,6 @@ export default makeLevel({
   for (const [c, r] of [[38, 44], [58, 44], [44, 36], [52, 36]]) K.qoqC(c, r, 180, { wave: 'pumps', delay: 0.5 });
 
   K.goal(X(54) + 16, Z(9) + 16, 8); K.goal(X(90) + 16, Z(30) + 16, 0);
+
+  K.ruins({ seed: 1074, theme: 'bone', big: 22 });
 });

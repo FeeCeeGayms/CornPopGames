@@ -3,10 +3,12 @@
 import { makeLevel } from '../kit.js';
 
 export default makeLevel({
-  name: 'E3M1', title: 'E3M1: THE PIDSER CAVE', ambience: 'street', ambient: 14, music: 'assets/music/rotted_circuitry.mp3',
+  name: 'E3M1', title: 'E3M1: THE PIDSER CAVE', ambience: 'street', ambient: 36, music: 'assets/music/rotted_circuitry.mp3',
   fog: { color: [0.035, 0.025, 0.04], density: 0.00045 }, skyTint: [0.55, 0.4, 0.8],
   rain: { min: [64, 0, 1280], max: [3136, 560, 3008] },
   styles: [{ color: [1, 0.12, 0.08], pattern: 'neon' }, { color: [1, 1, 0.95], pattern: 'fluoro' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.08], pattern: 'pulse' }],
+  // the Pidser Cave bunker (v0.29): riveted plates, warm lamps, floors polished enough to mirror them
+  lightTint: [1, 0.9, 0.74], gloss: 1, retex: {'concrete': 'bunkerplate', 'concretedark': 'bunkerdark', 'steel': 'bunkerbig', 'steeldark': 'bunkerceil', 'ceil': 'bunkerceil', 'trim': 'bunkertrim', 'stepside': 'bunkertrim', 'diamond': 'bunkerfloor', 'tile': 'bunkerfloor', 'tilebrown': 'bunkerfloor2', 'rustpanel': 'bunkerrust', 'jailfloor': 'bunkerfloor', 'jaildark': 'bunkerdark', 'jailmetal': 'bunkerplate', 'brickdark': 'bunkerplate'},
 }, 100, 96, 'brickdark', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const sky = (f, floor, side = 'concrete') => ({ f, c: 576, floor, ceil: 'sky', side, sky: true });
@@ -23,6 +25,7 @@ export default makeLevel({
   // ======================= OUTSIDE =======================
   K.wall(0, 60, 99, 95, 'building'); K.wall(0, 64, 77, 67, 'steel');
   K.paint(2, 72, 97, 93, T(STREET)); K.paint(2, 68, 97, 71, T(WALK));
+  K.paint(2, 68, 77, 69, T({ ...WALK, c: 322 }));                // the bunker is a low drum: sky above its crust
   K.paint(78, 40, 97, 71, T(STREET));                       // parking lot
   K.paint(86, 40, 97, 50, T(DOCK)); K.stairs(88, 51, 95, 53, 'N', 16, 48, DOCK);
   K.paint(2, 46, 10, 67, T(STREET));                        // back alley
@@ -32,13 +35,19 @@ export default makeLevel({
   K.item('soaker', X(16), Z(82));
   K.msg([X(12), 0, Z(78)], [X(20), 100, Z(88)], 'A SUPER SOAKER full of yellow juice!');
   // facade, neon sign and street dressing
+  // the base is a gigantic pepperoni pizza: its crust runs along the top of the wall, with cheese running down the plates
+  K.props((pr, ctx) => { let s = 91; const rn = () => (s = (s * 16807) % 2147483647) / 2147483647; const x0 = X(1), x1 = X(78), z = Z(68) + 8, yc = 288, L = 72;
+    for (let x = x0; x < x1; x += L) { const r = 27 + rn() * 7, len = Math.min(L, x1 - x) + 6; pr.cylinder(x + len / 2 - 3, yc - len / 2 + rn() * 4, z, r, len, 'crust', { rz: Math.PI / 2, segs: 10, capTex: 'crust' }); }
+    for (let x = x0 + 10; x < x1 - 10; x += 22 + rn() * 44) { if (x > X(42) && x < X(55) && false) continue; const w = 12 + rn() * 20, h = Math.min((x > X(42) && x < X(55) ? 22 : 999), 18 + rn() * rn() * 110); pr.box(x, yc - 22 - h, z - 5, w, h, 5, 'cheese'); pr.sphere(x, yc - 22 - h, z - 5, w / 2, 'cheese', { segs: 8, rings: 5, sz: 0.35 });
+      if (rn() < 0.3) pr.cylinder(x + w, yc - 40 - rn() * 30 - 2.5, z - 5, 17 + rn() * 6, 5, 'pepperoni', { rx: Math.PI / 2, segs: 12, capTex: 'pepperoni' }); }
+     });
   K.sign(X(48) + 16, 200, Z(68), 'pz', 'sign_pidser', 300, 56);
   K.brush([X(43), 168, Z(68)], [X(54), 232, Z(68) + 2], { tex: 'metal', solid: false, noshadow: true });
   K.light(X(48) + 16, 200, Z(68) + 40, 320, [1, 1, 1], 1); K.light(X(48) + 16, 90, Z(67), 260, [1, 0.12, 0.08]);
   for (const c of [8, 24, 40, 60, 76, 92]) K.props((pr, ctx) => { const x = X(c), z = Z(71) + 8; pr.cylinder(x, 8, z, 3, 150, 'metal', { segs: 8 }); pr.sphere(x, 158, z, 7, 'glow', { fullbright: true, segs: 8, rings: 5 }); ctx.brush([x - 4, 8, z - 4], [x + 4, 150, z + 4], { invisible: true, noshadow: true }); ctx.light(x, 140, z + 16, 380, [1, 0.78, 0.45]); });
   for (const x of [800, 1600, 2400]) K.light(x, 440, Z(84), 640, [0.22, 0.2, 0.4]);
   K.light(X(88), 440, Z(56), 640, [0.22, 0.2, 0.4]); K.light(X(6), 440, Z(56), 500, [0.22, 0.2, 0.4]);
-  K.props(pr => { pr.pipe(X(30), 0, Z(68) - 2, X(30), 576, Z(68) - 2, 4, 'metal'); pr.pipe(X(10), 240, Z(68) - 2, X(76), 240, Z(68) - 2, 3, 'metal'); pr.pipe(X(66), 0, Z(68) - 2, X(66), 240, Z(68) - 2, 3, 'metal'); });
+  K.props(pr => { pr.pipe(X(30), 0, Z(68) + 4, X(30), 262, Z(68) + 4, 4, 'metal'); pr.pipe(X(10), 240, Z(68) - 2, X(76), 240, Z(68) - 2, 3, 'metal'); pr.pipe(X(66), 0, Z(68) - 2, X(66), 240, Z(68) - 2, 3, 'metal'); });
   K.brush([X(36), 50, Z(68)], [X(38), 110, Z(68) + 12], { tex: 'metal', pz: 'cabinet' });
   K.crates(X(56), Z(69) + 4, 8, 1, 36); K.crates(X(58) + 8, Z(69) + 4, 8, 2, 30);
   K.brush([X(70), 8, Z(68)], [X(73), 60, Z(70)], { tex: 'steeldark', top: 'metal' });          // dumpster
@@ -158,4 +167,6 @@ export default makeLevel({
 
   // bot route: soaker, red key, blue key, then the exit
   K.goal(X(16), Z(82)); K.goal(X(8), Z(17), -112); K.goal(X(83) + 16, Z(10), -48);
+
+  K.ruins({'seed': 3041, 'mode': 'bunker', 'theme': 'bunker', 'big': 26, 'lights': 30});
 });
