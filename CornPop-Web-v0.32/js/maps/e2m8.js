@@ -6,9 +6,11 @@ import { makeLevel } from '../kit.js';
 import { nyc, NYC_STYLES } from '../nyc.js';
 
 export default makeLevel({
-  name: 'E2M8', title: 'E2M8: EMPIRE PIDSER BUILDING', ambience: 'street', ambient: 22, ambientColor: [0.58, 0.64, 1.0], music: 'assets/music/e1m8.mp3', city: true,
-  fog: { color: [0.035, 0.035, 0.05], density: 0.00042 }, skyTint: [0.3, 0.3, 0.5],
-  rain: { density: 1600, wind: [100, 60], top: 2300, loud: 1.2 }, storm: { every: [2, 6], power: 1.3 }, styles: NYC_STYLES,
+  name: 'E2M8', title: 'E2M8: EMPIRE PIDSER BUILDING', ambience: 'street', ambient: 24, ambientColor: [1.0, 0.6, 0.55], music: 'assets/music/e1m8.mp3', city: true,
+  fog: { color: [0.06, 0.02, 0.025], density: 0.00042 }, skyTint: [0.3, 0.3, 0.5],
+  // v0.31: the finale: a red vortex over Midtown with the eye in its throat, blood rain and red lightning
+  sky: { hell: 1, silh: 'city', a: [0.05, 0.005, 0.01], b: [0.85, 0.12, 0.06], glow: [0.6, 0.12, 0.05], vortex: 1, orb: { kind: 'eye', az: 0.9, el: 1.15, color: [1, 0.25, 0.1] } },
+  rain: { blood: true, density: 1400, wind: [100, 60], top: 2300, loud: 1.2 }, storm: { every: [2, 6], power: 1.3, color: [1, 0.25, 0.15] }, outTint: [1, 0.7, 0.65], styles: NYC_STYLES,
 }, 96, 96, 'sky', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 2400 });
   const H1 = 320, H2 = 640, H3 = 960, H4 = 1280, HM = 1520;

@@ -6,9 +6,11 @@ import { makeLevel } from '../kit.js';
 import { nyc, NYC_STYLES } from '../nyc.js';
 
 export default makeLevel({
-  name: 'E2M5', title: 'E2M5: CENTRAL PARK', ambience: 'street', ambient: 20, ambientColor: [0.55, 0.65, 1.0], music: 'assets/music/e1m5.mp3', city: true,
-  fog: { color: [0.04, 0.045, 0.05], density: 0.00095 }, skyTint: [0.32, 0.34, 0.45],
-  rain: { density: 1400, wind: [-30, 60] }, storm: { every: [4, 10], power: 1.15 }, styles: NYC_STYLES,
+  name: 'E2M5', title: 'E2M5: CENTRAL PARK', ambience: 'street', ambient: 50, ambientColor: [0.75, 0.85, 0.8], music: 'assets/music/e1m5.mp3', city: true,
+  fog: { color: [0.1, 0.115, 0.11], density: 0.0009 }, skyTint: [0.32, 0.34, 0.45],
+  // v0.31: a violent afternoon thunderstorm over the park
+  sky: { hell: 1, silh: 'city', a: [0.07, 0.08, 0.085], b: [0.42, 0.47, 0.45], glow: [0.25, 0.28, 0.25] },
+  rain: { density: 1500, wind: [-30, 60] }, storm: { every: [3, 8], power: 1.2 }, styles: NYC_STYLES,
 }, 116, 116, 'office', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 1600 });
   const GRASS = N.sky(8, 'grass', 'granite'), PATH = N.sky(8, 'dirt', 'granite'), PAVE = N.sky(8, 'sidewalk', 'granite');

@@ -166,28 +166,43 @@ export function nyc(K, o = {}) {
     if (texB) ctx.brush([x - 1, y + 156, z - 40], [x + 1, y + 172, z + 40], { tex: 'metalgreen', px: texB, nx: texB, fit: ['px', 'nx'], noshadow: true, solid: false });
     ctx.brush([x - 3, y, z - 3], [x + 3, y + 150, z + 3], { invisible: true, noshadow: true });
   });
-  // cars (taxi, cop, sedan, burnt); ry in radians, 0 = facing +z. Collision is the rotated footprint's bounding box.
+  // cars (taxi, cop, sedan, black, burnt); ry in radians, 0 = facing +z. Collision is the rotated footprint's bounding box.
+  // v0.31: a proper three-box car: body on wheels with arches and hubcaps, a sloping bonnet and boot, a glasshouse with pillars
+  // and a roof, chrome bumpers and grille, lamps, mirrors, door seams, handles and plates. Sedans pick a paint from their position.
   N.car = (x, z, y, ry = 0, kind = 'taxi', co = {}) => K.post(ctx => {
-    const body = { taxi: 'taxi', cop: 'carwhite', sedan: co.paint || 'carred', black: 'carblack', burnt: 'burnt' }[kind] || kind;
-    const glass = kind === 'burnt' ? 'burnt' : 'carglass'; const c = Math.cos(ry), s = Math.sin(ry);
+    const PAINTS = ['carred', 'carblue', 'cargreen', 'carsilver', 'carcream', 'carbrown', 'carblack'];
+    const body = { taxi: 'taxi', cop: 'carwhite', sedan: co.paint || PAINTS[Math.abs(Math.round(x * 7 + z * 13)) % PAINTS.length], black: 'carblack', burnt: 'burnt' }[kind] || kind;
+    const wreck = kind === 'burnt', glass = wreck ? 'burnt' : 'carglass', chrome = wreck ? 'burnt' : 'chromebar', dark = wreck ? 'burnt' : 'carblack', pr = ctx.props; const c = Math.cos(ry), s = Math.sin(ry);
     const P = (lx, lz) => [x + lx * c + lz * s, z - lx * s + lz * c];
-    ctx.props.box(x, y + 13, z, 72, 22, 156, [body, body, body, 'carblack', body, body], { ry });                       // body
-    for (const q of [-1, 1]) { const [bx, bz] = P(0, q * 79); ctx.props.box(bx, y + 12, bz, 74, 9, 4, 'carblack', { ry }); }  // bumpers
-    ctx.props.cabin(...P(0, 72 - 116).flatMap((v, k) => k === 0 ? [v, y + 35] : [v]), 70, 7, 64, 0, 0, [body, body, body, body, body, body], ry); // trunk lid
-    ctx.props.cabin(...P(0, 46).flatMap((v, k) => k === 0 ? [v, y + 35] : [v]), 70, 4, 50, 0, 0, [body, body, body, body, body, body], ry);      // hood
-    ctx.props.cabin(...P(0, -6).flatMap((v, k) => k === 0 ? [v, y + 35] : [v]), 64, 24, 78, 20, 14, [glass, glass, body, body, glass, glass], ry); // cabin with sloped screens
-    for (const [wx, wz] of [[-34, 46], [34, 46], [-34, -50], [34, -50]]) { const [px, pz] = P(wx, wz); ctx.props.cylinder(px, y + 13, pz, 13, 9, 'tire', { rz: Math.PI / 2, ry, segs: 10 }); }
-    const [hx, hz] = P(0, 79), [tx, tz] = P(0, -79);
-    if (kind !== 'burnt') { for (const q of [-24, 24]) { const [lx, lz] = P(q, 78.5); ctx.props.box(lx, y + 28, lz, 12, 6, 2, 'glow', { ry, fullbright: true }); const [rx, rz] = P(q, -78.5); ctx.props.box(rx, y + 30, rz, 12, 5, 2, 'redlight', { ry, fullbright: true }); }
+    const B = (lx, ly, lz, w, h, d, tex, o = {}) => { const [px, pz] = P(lx, lz); pr.box(px, y + ly, pz, w, h, d, tex, { ry, ...o }); };          // a box in the car's own frame (ly = its bottom)
+    const Wg = (lx, ly, lz, w, h, d, inF, inB, tex) => { const [px, pz] = P(lx, lz); pr.cabin(px, y + ly, pz, w, h, d, inF, inB, tex, ry); };
+    B(0, 9, 0, 72, 15, 156, [body, body, body, dark, body, body]);                                    // lower body, off the ground
+    B(0, 5, 0, 60, 5, 120, dark);                                                                     // floor pan
+    Wg(0, 24, 51, 70, 9, 54, 0, 0, [body, body, body, body, body, body]);                             // bonnet...
+    Wg(0, 33, 51, 66, 3, 50, 16, 0, [body, body, body, body, body, body]);                            // ...with a raised centre sloping to the nose
+    Wg(0, 24, -55, 70, 10, 46, 0, 0, [body, body, body, body, body, body]);                           // boot
+    Wg(0, 24, -4, 70, 10, 72, 0, 0, [body, body, body, body, body, body]);                            // waistline under the windows
+    Wg(0, 34, -4, 64, 21, 72, 22, 16, [glass, glass, body, body, glass, glass]);                      // glasshouse: raked windscreen and rear window
+    B(0, 54.5, -7, 58, 2.5, 36, body);                                                                // roof panel
+    for (const q of [-1, 1]) { B(q * 31.4, 34, -6, 2.2, 20, 5, body);                                 // B-pillars
+      B(q * 36.2, 12, 14, 0.5, 21, 1, dark); B(q * 36.2, 12, -30, 0.5, 21, 1, dark); B(q * 36.2, 12, -8, 0.5, 21, 1, dark);   // door seams
+      B(q * 36.4, 27, 6, 0.6, 1.6, 6, chrome); B(q * 36.4, 27, -16, 0.6, 1.6, 6, chrome);             // handles
+      B(q * 36.3, 20, 0, 0.5, 1.6, 150, chrome);                                                      // a chrome strip along the flank
+      B(q * 38.5, 35, 22, 5, 4, 3, body);                                                             // door mirrors
+      for (const wz of [48, -50]) { B(q * 34.6, 6, wz, 3.4, 23, 33, dark);                            // wheel arches
+        const [px, pz] = P(q * 33, wz); pr.cylinder(px, y + 13, pz, 13, 10, 'tire', { rz: Math.PI / 2, ry, segs: 12, capTex: wreck ? 'burnt' : 'hubcap' }); } }
+    for (const q of [-1, 1]) B(0, 8, q * 79.5, 76, 7, 5, chrome);                                     // bumpers
+    B(0, 16, 78.4, 40, 9, 1.5, wreck ? 'burnt' : 'cargrille', { fit: true });                         // grille
+    if (!wreck) { for (const q of [-25, 25]) { B(q, 17, 78.6, 13, 7, 2, 'glow', { fullbright: true }); B(q, 19, -78.6, 14, 6, 2, 'redlight', { fullbright: true }); }
+      B(0, 9, 82.2, 16, 6, 0.6, 'carplate', { fit: true }); B(0, 12, -82.2, 16, 6, 0.6, 'carplate', { fit: true });
       if (co.lights !== false) ctx.light(...P(0, 140).flatMap((v, k) => k === 0 ? [v, y + 30] : [v]), 240, [1, 0.95, 0.8]); }
-    if (kind === 'taxi') ctx.props.box(...P(0, -8).flatMap((v, k) => k === 0 ? [v, y + 68] : [v]), 26, 10, 10, ['taxisign', 'taxisign', 'taxi', 'taxi', 'taxisign', 'taxisign'], { ry, fullbright: true });
-    if (kind === 'cop') { const [bx, bz] = P(0, -8); ctx.props.box(...P(-10, -8).flatMap((v, k) => k === 0 ? [v, y + 68] : [v]), 18, 6, 10, 'redlight', { ry, fullbright: true }); ctx.props.box(...P(10, -8).flatMap((v, k) => k === 0 ? [v, y + 68] : [v]), 18, 6, 10, 'glowblue', { ry, fullbright: true });
+    if (kind === 'taxi') { B(0, 57, -8, 26, 9, 9, ['taxisign', 'taxisign', 'taxi', 'taxi', 'taxisign', 'taxisign'], { fullbright: true }); for (const q of [-1, 1]) B(q * 36.3, 14, -8, 0.5, 5, 44, 'checker'); }
+    if (kind === 'cop') { const [bx, bz] = P(0, -8); B(0, 57, -8, 44, 2, 8, dark); B(-11, 59, -8, 18, 6, 9, 'redlight', { fullbright: true }); B(11, 59, -8, 18, 6, 9, 'glowblue', { fullbright: true });
       ctx.light(bx, y + 90, bz, 300, [1, 0.1, 0.05], 3); ctx.light(bx, y + 92, bz, 300, [0.15, 0.3, 1], 4); }
-    if (kind === 'burnt' && co.fire !== false) N._fire(ctx, x, y + 40, z, co.fireSize || 34);
+    if (wreck && co.fire !== false) N._fire(ctx, x, y + 40, z, co.fireSize || 34);
     const ex = Math.abs(36 * c) + Math.abs(78 * s), ez = Math.abs(36 * s) + Math.abs(78 * c);
     ctx.brush([x - ex, y, z - ez], [x + ex, y + 42, z + ez], { invisible: true, noshadow: true });
     ctx.brush([x - ex * 0.7, y + 42, z - ez * 0.7], [x + ex * 0.7, y + 68, z + ez * 0.7], { invisible: true, noshadow: true });
-    void hx; void hz; void tx; void tz;
   });
   // subway entrance deco around a stair opening (cells c0..c1 x r0..r1): railings, green globe lamps, SUBWAY sign on the closed end
   N.subwayRails = (c0, r0, c1, r1, openSide, y = 8) => K.post(ctx => {

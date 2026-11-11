@@ -5,9 +5,11 @@ import { makeLevel } from '../kit.js';
 import { nyc, NYC_STYLES } from '../nyc.js';
 
 export default makeLevel({
-  name: 'E2M3', title: 'E2M3: THE EL', ambience: 'street', ambient: 22, ambientColor: [0.58, 0.64, 1.0], music: 'assets/music/e1m3.mp3', city: true,
-  fog: { color: [0.035, 0.034, 0.045], density: 0.0005 }, skyTint: [0.3, 0.32, 0.48],
-  rain: { density: 1300, wind: [70, 10] }, storm: { every: [5, 12], power: 1 }, styles: NYC_STYLES,
+  name: 'E2M3', title: 'E2M3: THE EL', ambience: 'street', ambient: 46, ambientColor: [0.85, 0.86, 0.92], music: 'assets/music/e1m3.mp3', city: true,
+  fog: { color: [0.2, 0.21, 0.23], density: 0.0011 }, skyTint: [0.3, 0.32, 0.48],
+  // v0.31: a grey dawn in thick fog and drizzle, a pale sun low over Queens
+  sky: { hell: 1, silh: 'city', a: [0.2, 0.21, 0.24], b: [0.62, 0.6, 0.58], glow: [0.5, 0.4, 0.3], orb: { kind: 'moon', az: 0.4, el: 0.3, color: [1, 0.92, 0.75] } },
+  rain: { density: 450, wind: [20, 6], color: [0.6, 0.62, 0.66] }, mist: { color: [0.3, 0.31, 0.33], density: 0.0016 }, styles: NYC_STYLES,
 }, 120, 96, 'tenementdark', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 1600 });
   const SHOP = { f: 0, c: 200, floor: 'concretedark', ceil: 'ceil', side: 'concrete', upper: 'brickdark', roof: 220, roofSky: 1600 };

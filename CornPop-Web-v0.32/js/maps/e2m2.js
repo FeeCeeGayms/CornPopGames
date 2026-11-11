@@ -6,9 +6,11 @@ import { makeLevel } from '../kit.js';
 import { nyc, NYC_STYLES } from '../nyc.js';
 
 export default makeLevel({
-  name: 'E2M2', title: 'E2M2: TIMES SQUARE', ambience: 'street', ambient: 24, ambientColor: [0.72, 0.6, 1.0], music: 'assets/music/e1m6.mp3', city: true,
-  fog: { color: [0.045, 0.03, 0.05], density: 0.0005 }, skyTint: [0.45, 0.3, 0.55],
-  rain: { density: 1200, wind: [40, -20] }, storm: { every: [7, 15], power: 0.85 }, styles: NYC_STYLES,
+  name: 'E2M2', title: 'E2M2: TIMES SQUARE', ambience: 'street', ambient: 30, ambientColor: [0.7, 0.95, 0.75], music: 'assets/music/e1m6.mp3', city: true,
+  fog: { color: [0.03, 0.05, 0.035], density: 0.0005 }, skyTint: [0.45, 0.3, 0.55],
+  // v0.31: dusk under a green vortex: no rain, wet streets, glowing motes drifting up into it
+  sky: { hell: 1, silh: 'city', a: [0.01, 0.03, 0.02], b: [0.25, 0.6, 0.3], glow: [0.2, 0.12, 0.25], vortex: 1, vortexAz: 1.2, vortexEl: 1.05, vortexColor: [0.45, 1, 0.4] },
+  wet: true, rain: { kind: 'embers', color: [0.4, 1, 0.4], density: 300, wind: [6, 4] }, storm: { every: [9, 18], power: 0.7, color: [0.5, 1, 0.5] }, outTint: [0.8, 1, 0.82], styles: NYC_STYLES,
 }, 112, 112, 'office', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 1800 });
   const LOBBY = { f: 8, c: 200, floor: 'carpet', ceil: 'gold', side: 'gold', upper: 'limestone', roof: 360, roofSky: 1800 };

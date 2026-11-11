@@ -64,7 +64,8 @@ void main(){
 }`;
 const SKY_FRAG = `
 uniform sampler2D map; uniform float time; uniform vec3 camPos; uniform vec3 tint; uniform float city; uniform float storm; uniform float bolt; uniform float boltAz; uniform float boltSeed; uniform vec3 fogColor; varying vec3 vWorld;
-uniform float hell; uniform vec3 skyA; uniform vec3 skyB; uniform vec3 glowCol; uniform vec3 orbDir; uniform vec3 orbCol; uniform float orbKind; uniform float silh; uniform vec3 boltCol;
+uniform float hell; uniform vec3 skyA; uniform vec3 skyB; uniform vec3 glowCol; uniform vec3 orbDir; uniform vec3 orbCol; uniform float orbKind; uniform float silh; uniform vec3 boltCol; uniform float vortex; uniform float moonK;
+vec3 skyline(vec3 d, vec3 c, float cloud);
 float h1(float n){ return fract(sin(n) * 43758.5453); }
 float hn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); float n = dot(i, vec2(1.0, 57.0));
   return mix(mix(h1(n), h1(n + 1.0), f.x), mix(h1(n + 57.0), h1(n + 58.0), f.x), f.y); }
@@ -73,8 +74,17 @@ vec3 hellSky(vec3 d, float lum, float a){
   float el = asin(clamp(d.y, -1.0, 1.0)); float az = atan(d.z, d.x); vec2 ring = vec2(cos(az), sin(az));
   vec2 sp = d.xz / max(d.y, 0.06) * 1.3;                                       // boiling cloud deck: dark masses, the cracks between them glow
   float n = hn(sp * 1.1 + vec2(time * 0.02, time * 0.012)) * 0.5 + hn(sp * 2.7 - vec2(time * 0.03, 0.0)) * 0.3 + hn(sp * 6.1 + time * 0.04) * 0.14 + lum * 0.25;
+  float vr = 9.0, vrim = 0.0; vec2 vq = vec2(0.0);
+  if (vortex > 0.0) {                                                          // a giant vortex: the cloud deck spirals into a hole in the sky
+    vec3 vu = normalize(cross(vec3(0.0, 1.0, 0.0), orbDir)), vv = cross(orbDir, vu); vq = vec2(dot(d, vu), dot(d, vv)); vr = length(vq) + (1.0 - step(0.0, dot(d, orbDir))) * 9.0;
+    float w = 2.6 * log(vr + 0.04) - time * 0.22; vec2 sq = vec2(vq.x * cos(w) - vq.y * sin(w), vq.x * sin(w) + vq.y * cos(w));
+    float arms = hn(sq * 3.2) * 0.55 + hn(sq * 8.5 + 3.0) * 0.3 + hn(sq * 19.0) * 0.15;
+    float wgt = exp(-vr * 1.25) * min(vortex, 1.0); n = mix(n, arms * 0.95 + 0.06, wgt);
+    vrim = smoothstep(0.2, 0.085, vr) * smoothstep(0.035, 0.085, vr); }
   float k = smoothstep(0.34, 0.72, n); a = max(a, smoothstep(0.5, 0.2, n));
   vec3 c = mix(skyA, skyB, k * k * 0.55) + skyB * pow(k, 5.0) * 0.9;
+  if (vortex > 0.0) { c += orbCol * exp(-vr * 2.6) * 0.5 * (0.8 + 0.2 * sin(time * 1.7)) + orbCol * vrim * (0.9 + 0.5 * k);       // the glowing throat
+    c = mix(c, orbCol * 0.04, smoothstep(0.075, 0.03, vr)); }                                                                // and the hole in the middle
   c = mix(c, skyA * 0.6, smoothstep(0.42, 0.2, n) * 0.7);
   if (orbKind > 0.5 && dot(d, orbDir) > 0.0) {
     vec3 u = normalize(cross(vec3(0.0, 1.0, 0.0), orbDir)), v = cross(orbDir, u); vec2 q = vec2(dot(d, u), dot(d, v)); float r = length(q); float veil = 1.0 - a * 0.4;
@@ -101,7 +111,8 @@ vec3 hellSky(vec3 d, float lum, float a){
   if (silh > 1.5) {                                                            // a volcano: the glow of its plume behind the mountains
     float dv = abs(atan(sin(az - 2.2), cos(az - 2.2))); c += vec3(1.0, 0.4, 0.08) * exp(-dv * dv * 22.0 - max(el - 0.5, 0.0) * 5.0) * (0.75 + 0.25 * sin(time * 1.7));
   }
-  if (silh > 0.5) for (int layer = 0; layer < 2; layer++) {
+  if (silh > 2.5) c = skyline(d, c, a);                                        // New York's own skyline (Episode 2)
+  else if (silh > 0.5) for (int layer = 0; layer < 2; layer++) {
     float L = float(layer); float hg; float lava = 0.0; float win = 0.0;
     if (silh < 1.5) {                                                          // ruined spires, broken towers, rubble
       float cols = 44.0 + L * 38.0; float uu = (az / 6.2832 + 0.5) * cols + L * 13.0; float id = floor(uu), fu = fract(uu);
@@ -135,7 +146,7 @@ vec3 hellSky(vec3 d, float lum, float a){
 vec3 skyline(vec3 d, vec3 c, float cloud){
   float el = asin(clamp(d.y, -1.0, 1.0)); float az = atan(d.z, d.x);
   float md = dot(d, normalize(vec3(-0.35, 0.5, -0.78)));
-  c += vec3(0.95, 0.95, 1.0) * smoothstep(0.99955, 0.9998, md) * (1.0 - cloud * 0.55) + vec3(0.18, 0.2, 0.28) * pow(max(md, 0.0), 90.0) * (1.0 - cloud * 0.4);
+  c += (vec3(0.95, 0.95, 1.0) * smoothstep(0.99955, 0.9998, md) * (1.0 - cloud * 0.55) + vec3(0.18, 0.2, 0.28) * pow(max(md, 0.0), 90.0) * (1.0 - cloud * 0.4)) * moonK;
   vec3 farCol = mix(vec3(0.05, 0.05, 0.08), fogColor * 2.5 + 0.03, 0.55);
   for (int layer = 0; layer < 2; layer++) {
     float L = float(layer); float cols = 90.0 + L * 70.0; float u = (az / 6.2832 + 0.5) * cols + L * 17.0; float id = floor(u), fu = fract(u);
@@ -339,7 +350,7 @@ export class Game {
     this.shared = { lm: { value: null }, sm: { value: null }, st: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) }, fogColor: { value: new THREE.Color(0, 0, 0) }, fogDensity: { value: 0 }, time: { value: 0 }, camPos: { value: new THREE.Vector3() },
       lightning: { value: 0 }, wetOn: { value: 0 }, storm: { value: 0 }, bolt: { value: 0 }, boltAz: { value: 0 }, boltSeed: { value: 0 }, city: { value: 0 },
       lightCol: { value: new THREE.Color(0.75, 0.8, 1) }, wetTint: { value: new THREE.Color(1, 1, 1) }, mist: { value: new THREE.Vector4(0, 0, 0, 0) }, mistY: { value: new THREE.Vector2(0, 0) },
-      hell: { value: 0 }, skyA: { value: new THREE.Color() }, skyB: { value: new THREE.Color() }, glowCol: { value: new THREE.Color() }, orbDir: { value: new THREE.Vector3(0, 1, 0) }, orbCol: { value: new THREE.Color() }, orbKind: { value: 0 }, silh: { value: 0 }, boltCol: { value: new THREE.Color(0.7, 0.75, 0.95) } };
+      hell: { value: 0 }, skyA: { value: new THREE.Color() }, skyB: { value: new THREE.Color() }, glowCol: { value: new THREE.Color() }, orbDir: { value: new THREE.Vector3(0, 1, 0) }, orbCol: { value: new THREE.Color() }, orbKind: { value: 0 }, silh: { value: 0 }, vortex: { value: 0 }, moonK: { value: 1 }, boltCol: { value: new THREE.Color(0.7, 0.75, 0.95) } };
     this.state = 'loading'; this.levelIndex = 0; this.paused = false; this.clock = new THREE.Clock();
     this.applyOpts();
     addEventListener('resize', () => this.resize()); this.resize();
@@ -424,7 +435,7 @@ export class Game {
       sub('Walking', 'B_idle', 0, 2); sub('Running', 'B_attack', 0, 20); sub('Walking', 'B_pain', 6, 16); }
     this.beansAsset.animMap = BEANS_ANIMS;
     try { this.bcmAsset = await new CornPopAsset().load('assets/models/bcm.glb', p => onProgress(0.99, 'Loading BCM')); this.bcmAsset.animMap = BCM_ANIMS; } catch (e) { console.warn('BCM model missing', e); this.bcmAsset = null; }
-    try { this.boojoAsset = await new CornPopAsset().load('assets/models/boojo.glb', p => onProgress(0.993, 'Loading Boojo')); this.boojoAsset.animMap = BOOJO_ANIMS; } catch (e) { console.warn('Boojo model missing', e); this.boojoAsset = null; }
+    try { this.boojoAsset = await new CornPopAsset().load('assets/models/boojo.glb', p => onProgress(0.993, 'Loading Boojo')); this.boojoAsset.animMap = BOOJO_ANIMS; this.boojoSkins = this.makeBoojoSkins(); } catch (e) { console.warn('Boojo model missing', e); this.boojoAsset = null; }
     try { this.tropAsset = await new CornPopAsset().load('assets/models/trop.glb', p => onProgress(0.995, 'Loading Trop')); this.tropAsset.animMap = TROP_ANIMS; } catch (e) { console.warn('Trop model missing', e); this.tropAsset = null; }
     this.soaker = new Soaker(this); this.cutter = new PizzaCutter(this); this.shotgun = new Shotgun(this); this.candygun = new CandyGun(this); this.turdgun = new TurdLauncher(this); this.arsenal = new Arsenal(this); this.aim = new THREE.Object3D();
     for (const w of Object.values(this.arsenal.guns)) try { this.renderer.compile(w.scene, w.cam); } catch (e) { } // no shader hitch on the first switch
@@ -450,7 +461,7 @@ export class Game {
     const map = this.T[tex] || this.T.brick;
     let m;
     const S = this.shared;
-    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor, hell: S.hell, skyA: S.skyA, skyB: S.skyB, glowCol: S.glowCol, orbDir: S.orbDir, orbCol: S.orbCol, orbKind: S.orbKind, silh: S.silh, boltCol: S.boltCol }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
+    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor, hell: S.hell, skyA: S.skyA, skyB: S.skyB, glowCol: S.glowCol, orbDir: S.orbDir, orbCol: S.orbCol, orbKind: S.orbKind, silh: S.silh, vortex: S.vortex, moonK: S.moonK, boltCol: S.boltCol }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
     else m = new THREE.ShaderMaterial({
       uniforms: { map: { value: map }, lm: this.shared.lm, sm: this.shared.sm, st: this.shared.st, fogColor: this.shared.fogColor, fogDensity: this.shared.fogDensity, time: this.shared.time, fullbright: { value: o.fullbright || o.liquid ? 1 : 0 }, nolm: { value: o.nolm || o.liquid ? 1 : 0 }, scroll: { value: new THREE.Vector2(...(this.scrollTex?.[tex] || (o.liquid ? [0.02, 0.01] : [0, 0]))) }, warp: { value: o.liquid ? 1 : 0 }, alpha: { value: o.liquid ? 0.82 : 1 }, lightning: S.lightning, wetOn: o.liquid ? { value: 0 } : S.wetOn, shine: { value: o.liquid || o.fullbright ? 0 : (map.userData.shine || 0) * (this.level?.gloss ?? 1) }, lightCol: S.lightCol, wetTint: S.wetTint, mist: S.mist, mistY: S.mistY },
       vertexShader: WORLD_VERT, fragmentShader: WORLD_FRAG, transparent: !!o.liquid, depthWrite: !o.liquid,
@@ -555,7 +566,8 @@ export class Game {
       const m = def.mist; U.mist.value.set(...(m ? m.color : [0, 0, 0]), m ? m.density || 0.0012 : 0); U.mistY.value.set(m && m.top != null ? m.top : 0, m && m.top != null ? m.range || 160 : 0);
       U.hell.value = sk.hell ? 1 : 0; U.skyA.value.setRGB(...(sk.a || [0.05, 0.01, 0.01])); U.skyB.value.setRGB(...(sk.b || [0.7, 0.12, 0.04])); U.glowCol.value.setRGB(...(sk.glow || [0.5, 0.12, 0.03]));
       const o = sk.orb; U.orbKind.value = o ? ({ moon: 1, sun: 2, eye: 3 }[o.kind] || 0) : 0; if (o) { const az = o.az || 0, el = o.el ?? 0.9; U.orbDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); U.orbCol.value.setRGB(...(o.color || [1, 0.15, 0.05])); }
-      U.silh.value = { ruins: 1, volcano: 2 }[sk.silh] || 0; }
+      U.silh.value = { ruins: 1, volcano: 2, city: 3 }[sk.silh] || 0; U.vortex.value = sk.vortex || 0; U.moonK.value = sk.hell ? (sk.moon ? 1 : 0) : 1;
+      if (sk.vortex && !o) { const az = sk.vortexAz || 0, el = sk.vortexEl ?? 1.1; U.orbDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); U.orbCol.value.setRGB(...(sk.vortexColor || [0.5, 1, 0.4])); } }
     this.baseFog = (def.fog || { color: [0, 0, 0] }).color.slice();
     this.storm = def.storm ? { cfg: def.storm, next: 2 + Math.random() * 4, t: 99, pulses: [], power: 0 } : null;
     this.shared.lightning.value = this.shared.storm.value = this.shared.bolt.value = 0;
@@ -875,14 +887,31 @@ export class Game {
     if (mi >= 3) drop('candygun');
     if (mi >= 4) drop('turdgun');
   }
+  // Boojo's wardrobe: copies of his texture with the yellow shirt and the taupe trousers re-dyed, so a street full of Boojos looks
+  // like a crowd and not like one man. Skin 0 is the original.
+  makeBoojoSkins() {
+    const skins = [null]; let src = null; this.boojoAsset.scene.traverse(o => { if (o.isMesh && o.material.map && !src) src = o.material.map; }); if (!src || !src.image) return skins;
+    const N = 512, cv = document.createElement('canvas'); cv.width = cv.height = N; const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(src.image, 0, 0, N, N); const base = g.getImageData(0, 0, N, N);
+    const LOOKS = [[[0.86, 0.2, 0.16], [0.16, 0.2, 0.36]], [[0.2, 0.42, 0.85], [0.3, 0.26, 0.2]], [[0.2, 0.62, 0.3], [0.2, 0.2, 0.22]], [[0.92, 0.92, 0.9], [0.14, 0.16, 0.2]], [[0.95, 0.5, 0.12], [0.24, 0.3, 0.42]],
+      [[0.6, 0.25, 0.7], [0.4, 0.38, 0.32]], [[0.9, 0.45, 0.6], [0.22, 0.2, 0.28]], [[0.25, 0.7, 0.75], [0.42, 0.3, 0.2]], [[0.2, 0.2, 0.22], [0.5, 0.48, 0.42]]];
+    for (const [shirt, pants] of LOOKS) {
+      const im = new ImageData(new Uint8ClampedArray(base.data), N, N), d = im.data;
+      for (let i = 0; i < d.length; i += 4) { const r = d[i], gg = d[i + 1], b = d[i + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+        if (r > 185 && gg > 170 && b < 175 && r - b > 55 && gg - b > 40) { const k = (r + gg) / 2 / 235; d[i] = 255 * shirt[0] * k; d[i + 1] = 255 * shirt[1] * k; d[i + 2] = 255 * shirt[2] * k; }      // the yellow shirt
+        else if (mx - mn < 34 && mx > 84 && mx < 150) { const k = mx / 118; d[i] = 255 * pants[0] * k; d[i + 1] = 255 * pants[1] * k; d[i + 2] = 255 * pants[2] * k; } }                                      // the taupe trousers (his hair is lighter)
+      const c2 = document.createElement('canvas'); c2.width = c2.height = N; c2.getContext('2d').putImageData(im, 0, 0);
+      const t = src.clone(); t.source = new THREE.Source(c2); t.needsUpdate = true; skins.push(t); // (a clone shares its Source: give each skin its own)
+    }
+    return skins;
+  }
   // Boojo: 2-3 per map, at random spots next to pickups (never in secrets, not near the start, not next to each other, with headroom)
   placeBoojos(pool) {
     if (!this.boojoAsset || !pool.length) return;
-    const st = this.ents.find(e => e.type === 'start'), W = this.world, spots = [], want = 2 + (Math.random() < 0.5 ? 1 : 0);
-    for (let tries = 0; tries < 60 && spots.length < want; tries++) {
+    const st = this.ents.find(e => e.type === 'start'), W = this.world, spots = [], city = !!this.level.city, want = city ? 9 + Math.floor(Math.random() * 3) : 2 + (Math.random() < 0.5 ? 1 : 0), gap = city ? 260 : 500; // New York's streets are full of them
+    for (let tries = 0; tries < (city ? 400 : 60) && spots.length < want; tries++) {
       const e = pool[Math.floor(Math.random() * pool.length)]; const p = this.freeSpotNear(e.pos); if (!p) continue;
       if (st && Math.hypot(p[0] - st.pos[0], p[2] - st.pos[2]) < 640) continue;
-      if (spots.some(q => Math.hypot(q[0] - p[0], q[2] - p[2]) < 500)) continue;
+      if (spots.some(q => Math.hypot(q[0] - p[0], q[2] - p[2]) < gap)) continue;
       const c = W.cell(Math.floor(p[0] / CELL), Math.floor(p[2] / CELL)); if (c.c - c.f < 88 || W.testPosition([p[0], p[1] + 25, p[2]], [-16, -24, -16], [16, 34, 16])) continue;
       // keep clear of lifts, doors, crushers and teleporters (a Boojo under a lift would hold it up), hazards, and narrow corridors
       if (W.movers.some(m => p[0] > m.min[0] - 96 && p[0] < m.max[0] + 96 && p[2] > m.min[2] - 96 && p[2] < m.max[2] + 96)) continue;

@@ -7,6 +7,8 @@ import { nyc, NYC_STYLES } from '../nyc.js';
 export default makeLevel({
   name: 'E2M1', title: "E2M1: HELL'S KITCHEN", ambience: 'street', ambient: 22, ambientColor: [0.55, 0.62, 1.05], music: 'assets/music/e1m4.mp3', city: true,
   fog: { color: [0.03, 0.032, 0.045], density: 0.00055 }, skyTint: [0.32, 0.32, 0.5],
+  // v0.31: night, rain and lightning
+  sky: { hell: 1, silh: 'city', moon: 1, a: [0.012, 0.014, 0.03], b: [0.2, 0.22, 0.38], glow: [0.16, 0.1, 0.06] },
   rain: { density: 1200, wind: [-50, 30] }, storm: { every: [6, 14], power: 1 }, styles: NYC_STYLES,
 }, 112, 108, 'tenementdark', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 1600 });

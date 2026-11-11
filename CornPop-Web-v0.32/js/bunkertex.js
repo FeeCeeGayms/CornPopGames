@@ -42,6 +42,14 @@ export function addBunkerTextures(T) {
         if (d > r) { p.mul(px, py, 0.7); continue; } const k = (d > r - 3 ? 0.72 : 1) * (0.88 + rnd() * 0.24); p.set(px, py, [0.66 * k, 0.13 * k, 0.08 * k]); }
       for (let k = 0; k < 26; k++) { const a = rnd() * 6.3, d = Math.sqrt(rnd()) * (r - 4); p.mul(x + Math.cos(a) * d, y + Math.sin(a) * d, rnd() < 0.5 ? 0.6 : 1.45); } }
     p.speckle(900, 0.85, 1.15); return p; })());
+  // ---- New York's cars (v0.31): more paint colours, a chrome grille, hubcaps, number plates ----
+  const paint = (c, sd) => { srand(sd); const p = new Pix(32, 32); p.fill(hex(c), 0.06); p.cloudy(1, 0.22); for (let x = 0; x < 32; x++) { p.mul(x, 3, 1.5); p.mul(x, 4, 1.25); p.mul(x, 30, 0.6); } return p.toTexture(); };
+  T.carblue = paint(0x1c3a78, 620); T.cargreen = paint(0x1f4a2c, 621); T.carsilver = paint(0x8a8e94, 622); T.carcream = paint(0xc8b890, 623); T.carbrown = paint(0x4a2c1a, 624);
+  T.chromebar = tx((() => { const p = new Pix(16, 16); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) { const k = 0.45 + 0.5 * Math.abs(Math.sin(y * 0.55)); p.set(x, y, [k * 0.82, k * 0.85, k * 0.9]); } return p; })());
+  T.cargrille = tx((() => { const p = new Pix(32, 16); p.fill([0.03, 0.03, 0.035], 0.02); for (let y = 2; y < 16; y += 3) for (let x = 0; x < 32; x++) p.set(x, y, [0.55, 0.57, 0.6]); for (let x = 0; x < 32; x += 6) for (let y = 0; y < 16; y++) p.set(x, y, [0.4, 0.42, 0.45]); p.bevel(0, 0, 32, 16, 2.2, 0.6); return p; })());
+  T.hubcap = tx((() => { const p = new Pix(32, 32); p.fill([0.05, 0.05, 0.05], 0.03); for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) { const d = Math.hypot(x - 15.5, y - 15.5), a = Math.atan2(y - 15.5, x - 15.5); if (d < 15) { let k = 0.5 + 0.3 * Math.cos(a * 5); if (d < 4) k = 0.9; else if (d > 12) k = 0.75; p.set(x, y, [k * 0.8, k * 0.82, k * 0.86]); } } return p; })());
+  T.carplate = tx((() => { const p = new Pix(32, 16); p.fill([0.85, 0.82, 0.6], 0.03); p.bevel(0, 0, 32, 16, 1.2, 0.5); for (let i = 0; i < 6; i++) p.rect(4 + i * 4, 5, 3, 7, [0.08, 0.1, 0.3]); return p; })());
+  T.snowground = tx((() => { srand(626); const p = new Pix(64, 64); p.fill(hex(0xb4bcc8), 0.05); p.cloudy(1, 0.3); p.cloudy(3, 0.18); p.speckle(200, 0.85, 1.12); return p; })());
   // see-through textures: no mipmaps at all (a blurred magenta key turns pink at a distance)
   // (the old bars and railing textures have speckle noise in their magenta key, which showed up as purple dots: snap it back)
   for (const k of ['bars', 'railing']) { const t = T[k], d = t && t.image && t.image.data; if (!d) continue; for (let i = 0; i < d.length; i += 4) if (d[i + 1] < 12 && d[i] > 90 && Math.abs(d[i] - d[i + 2]) < 8) { d[i] = 255; d[i + 1] = 0; d[i + 2] = 255; } t.needsUpdate = true; }

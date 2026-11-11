@@ -92,7 +92,11 @@ export default makeLevel({
   K.qoqC(18, 45, 90); K.qoqC(34, 45, -90); K.qoqC(26, 55, 0); K.qoq(X(12), Z(47), 90, { turret: true, y: 64 });
   K.slices([[X(17), Z(55)], [X(35), Z(55)], [X(12), Z(53), 64]]); K.juice(X(17), Z(45)); K.health(X(25), Z(44));
   // the trap pit (south 1 lands here) - a door leads back out
-  K.room(18, 63, 26, 70, { ...DARK, c: 128 }, 'techgray'); K.door(20, 62, 22, 62, TELE, { top: 112 });
+  // (v0.32: the old door here opened onto a solid wall, so the pit was a dead end. The way out is now a short passage
+  //  in the north-east corner that comes up in the hall beside the pad's alcove, not onto the pad.)
+  K.room(18, 63, 26, 70, { ...DARK, c: 128 }, 'techgray');
+  K.paint(25, 57, 26, 61, T({ ...CORR, c: 128 })); K.door(25, 62, 26, 62, TELE, { top: 112 });
+  K.light(X(26), 90, Z(59), 140, [1, 0.5, 0.3], 1);
   K.qoqC(19, 69, 0); K.qoqC(25, 69, 0); K.qoqC(25, 64, 0); K.health(X(19), Z(64)); K.light(X(22), 90, Z(67), 160, [1, 0.3, 0.2], 2);
   // gold key closets burst open
   const GC = { f: 0, c: 128, floor: 'tile', ceil: 'ceil', side: 'stepside', upper: 'techgreen' };

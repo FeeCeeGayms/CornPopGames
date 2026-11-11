@@ -7,9 +7,11 @@ import { makeLevel } from '../kit.js';
 import { nyc, NYC_STYLES } from '../nyc.js';
 
 export default makeLevel({
-  name: 'E2M7', title: 'E2M7: BROOKLYN BRIDGE', ambience: 'street', ambient: 22, ambientColor: [0.56, 0.64, 1.0], music: 'assets/music/rotted_circuitry.mp3', city: true,
-  fog: { color: [0.035, 0.04, 0.05], density: 0.0006 }, skyTint: [0.32, 0.34, 0.5],
-  rain: { density: 1500, wind: [140, 40], loud: 1.2 }, storm: { every: [3, 8], power: 1.2 }, styles: NYC_STYLES,
+  name: 'E2M7', title: 'E2M7: BROOKLYN BRIDGE', ambience: 'street', ambient: 22, ambientColor: [0.7, 0.6, 1.0], music: 'assets/music/rotted_circuitry.mp3', city: true,
+  fog: { color: [0.04, 0.03, 0.06], density: 0.0006 }, skyTint: [0.32, 0.34, 0.5],
+  // v0.31: night gale on the bridge, a violet vortex turning over the river
+  sky: { hell: 1, silh: 'city', a: [0.02, 0.01, 0.04], b: [0.4, 0.22, 0.65], glow: [0.2, 0.1, 0.3], vortex: 1, vortexAz: -0.5, vortexEl: 0.8, vortexColor: [0.75, 0.45, 1] },
+  rain: { density: 1500, wind: [140, 40], loud: 1.2 }, storm: { every: [3, 8], power: 1.2, color: [0.8, 0.6, 1] }, styles: NYC_STYLES,
 }, 128, 72, 'sky', K => {
   const { X, Z, C } = K; const T = s => K.type(s); const N = nyc(K, { sky: 1600 });
   const ROAD = N.ROAD(0), PROM = N.sky(64, 'boards', 'steelbeam'), RIVER = N.sky(-500, 'concretedark', 'granite');

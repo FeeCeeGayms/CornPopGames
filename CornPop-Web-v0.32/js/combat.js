@@ -349,6 +349,7 @@ export class Qoq {
       this.glow.scale.set(150, 170, 1); game.scene.add(this.glow); this.flyVel = [0, 0, 0]; this.fireCd = 1 + Math.random() * 2; this.bobPh = Math.random() * 6;
     }
     this.model.setState('idle', 0, true);
+    if (this.boojo && game.boojoSkins) { const t = game.boojoSkins[game.boojoN = ((game.boojoN || 0) + 1 + Math.floor(Math.random() * 3)) % game.boojoSkins.length]; if (t) for (const m of this.model.mats) { m.map = t; if (m.emissiveMap) m.emissiveMap = t; } } // a different outfit each
     if (this.boojo) { // arm bones for the panic flail, and a random pose phase so a crowd of Boojos doesn't move in lockstep
       const B = {}; this.model.root.traverse(o => { if (o.isBone) B[o.name] = o; });
       this.arms = [['Left', -1], ['Right', 1]].map(([s, side]) => ({ up: B[s + 'UpperArm'], lo: B[s + 'LowerArm'], hand: B[s + 'Hand'], side })).filter(a => a.up && a.lo && a.hand);
@@ -425,7 +426,12 @@ export class Qoq {
   flyMove(v, dt) {
     const W = this.game.world, p = this.phys.pos, mn = [-18, -22, -18], mx = [18, 30, 18];
     // never move while embedded in something: pop back to the last free spot (stops him drifting through walls and doors)
-    if (W.testPosition(p, mn, mx, this.brush)) { if (this.lastFree) { p[0] = this.lastFree[0]; p[1] = this.lastFree[1]; p[2] = this.lastFree[2]; } else p[1] -= 8; v[0] = v[1] = v[2] = 0; return; }
+    // (v0.32: one that spawns overlapping a pillar has no last free spot yet; it used to sink through the floor and die in the void, so look for the nearest free spot instead)
+    if (W.testPosition(p, mn, mx, this.brush)) {
+      if (this.lastFree) { p[0] = this.lastFree[0]; p[1] = this.lastFree[1]; p[2] = this.lastFree[2]; }
+      else { let done = false; for (let r = 4; r <= 96 && !done; r += 4) for (let a = 0; a < 16 && !done; a++) { const q = [p[0] + Math.cos(a * Math.PI / 8) * r, p[1] + (a % 4 === 1 ? r * 0.5 : 0), p[2] + Math.sin(a * Math.PI / 8) * r]; if (!W.testPosition(q, mn, mx, this.brush)) { p[0] = q[0]; p[1] = q[1]; p[2] = q[2]; this.lastFree = q; done = true; } } if (!done) p[1] += 4; }
+      v[0] = v[1] = v[2] = 0; return;
+    }
     for (const axis of [[v[0] * dt, 0, 0], [0, 0, v[2] * dt], [0, v[1] * dt, 0]]) {
       const e = [p[0] + axis[0], p[1] + axis[1], p[2] + axis[2]];
       const tr = W.trace(p, e, mn, mx, this.brush, true);
