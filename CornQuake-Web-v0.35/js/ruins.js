@@ -5,6 +5,7 @@
 // It only builds where it is safe: every solid piece sits inside a flat, empty rectangle with a two-cell clear ring around it
 // (so there is always a way round), and nothing is placed near pickups, monsters, doors, lifts, crushers, teleporters, triggers,
 // hazards, map brushes or the bot's goals. The layout is seeded per map, so a map always looks the same.
+import * as THREE from 'three';
 const S = 32;
 function rng32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
@@ -21,7 +22,8 @@ export function ruinify(ctx, o = {}) {
   const W = ctx.W, P = ctx.props, R = rng32(o.seed || 1), TH = { ...THEMES[o.theme || 'ruin'], ...(o.tex || {}) };
   const rnd = (a, b) => a + R() * (b - a), ri = (a, b) => Math.floor(rnd(a, b + 1)), pick = a => a[Math.floor(R() * a.length)], chance = p => R() < p;
   const GW = W.W, GH = W.H, cell = (c, r) => W.cell(c, r);
-  const dens = o.density ?? 1; let lights = o.lights ?? 16;
+  const brush0 = W.brushes.length;   // everything added from here on is decoration (the block check in test/ looks at it)
+  const dens = o.density ?? 1; let lights = o.lights ?? (o.mode === 'bunker' ? 16 : 22);
   const stats = { big: 0, wall: 0, scatter: 0, beams: 0 };
   // mode 'bunker' (Episode 3, the Pidser Cave): the same placement rules, but the pieces are bunker fittings instead of ruins:
   // pizzas on stone slabs, kegs, crates and pizza boxes, steel pillars, pendant lamps, workbenches; cage lamps, ribs with brackets,
@@ -51,7 +53,7 @@ export function ruinify(ctx, o = {}) {
   // a box: centre x,z, bottom y. Tall boxes are stacked from chunks so the vertex lighting follows the light up the wall.
   const box = (x, y, z, w, h, d, tex, q = {}) => { if (q.ry || q.rx || q.rz || h <= 80) { P.box(x, y, z, w, h, d, Array.isArray(tex) ? tex : [tex, tex, q.top || tex, null, tex, tex], q); return; }
     const n = Math.ceil(h / 72); for (let i = 0; i < n; i++) P.box(x, y + h * i / n, z, w, h / n, d, Array.isArray(tex) ? tex : [tex, tex, i === n - 1 ? q.top || tex : null, null, tex, tex], q); };
-  const solid = (x0, y0, z0, x1, y1, z1) => ctx.brush([x0, y0, z0], [x1, y1, z1], { invisible: true });
+  const solid = (x0, y0, z0, x1, y1, z1) => ctx.brush([x0, y0, z0], [x1, y1, z1], { invisible: true, deco: true });
   const stick = (p, ry, tilt, len, r0, r1, tex, segs = 6) => { const dx = Math.sin(ry) * Math.sin(tilt), dy = Math.cos(tilt), dz = Math.cos(ry) * Math.sin(tilt); P.cylinder(p[0] + dx * len / 2, p[1] + dy * len / 2 - len / 2, p[2] + dz * len / 2, r0, len, tex, { rTop: r1, ry, rx: tilt, segs }); return [p[0] + dx * len, p[1] + dy * len, p[2] + dz * len]; };
   const light = (x, y, z, l, col, style = 0) => { if (lights <= 0) return false; lights--; ctx.light(x, y, z, l, col, style, { raw: true }); return true; };
   const fire = (x, y, z, size) => ctx.ent({ type: 'fire', pos: [x, y, z], size, smoke: false });
@@ -73,7 +75,7 @@ export function ruinify(ctx, o = {}) {
     box(x, y, z, r * 2 + 12, 8, r * 2 + 12, TH.dark); P.cylinder(x, y + 8, z, r, h - 8, tex, { segs: 10, rTop: r * 0.9 });
     if (intact) { box(x, y + h, z, r * 2 + 6, 6, r * 2 + 6, TH.trim); box(x, y + h + 6, z, r * 2 + 16, 8, r * 2 + 16, TH.dark); }
     else P.cylinder(x + rnd(-2, 2), y + h, z + rnd(-2, 2), r * 0.85, rnd(6, 14), 'rubble', { segs: 5, rTop: r * 0.3, ry: R() * 3 });
-    solid(x - r, y, z - r, x + r, y + h + (intact ? 14 : 8), z + r);
+    { const q = Math.min(r, 10); solid(x - q, y, z - q, x + q, y + h + (intact ? 14 : 8), z + q); }   // (a little slimmer than it looks, so a column in a three-cell passage never pinches it)
   };
   const tree = (x, z, y, h) => { const lean = rnd(0, 0.18), ry0 = R() * 6.3; let top = stick([x, y - 4, z], ry0, lean, h, 9, 5, 'deadbark', 7); solid(x - 8, y, z - 8, x + 8, y + h * 0.8, z + 8);
     for (let i = 0; i < ri(4, 6); i++) { const a = R() * 6.3, t = rnd(0.5, 1.0), base = [x + Math.sin(ry0) * Math.sin(lean) * h * t, y + h * t * rnd(0.55, 1), z + Math.cos(ry0) * Math.sin(lean) * h * t]; const e = stick(base, a, rnd(0.6, 1.15), rnd(26, 54), 3.4, 1.2, 'deadbark', 5); if (chance(0.7)) stick(e, a + rnd(-0.9, 0.9), rnd(0.3, 1.0), rnd(12, 26), 1.4, 0.4, 'deadbark', 4); }
@@ -103,6 +105,50 @@ export function ruinify(ctx, o = {}) {
   const sarcophagus = (x, z, y, alongX) => { const w = alongX ? 70 : 30, d = alongX ? 30 : 70; box(x, y, z, w + 8, 8, d + 8, TH.dark); box(x, y + 8, z, w, 24, d, TH.wall); P.box(x + rnd(-4, 4), y + 32, z + rnd(-4, 4), w + 4, 7, d + 4, [TH.dark, TH.dark, 'skullfrieze', null, TH.dark, TH.dark], { ry: rnd(-0.16, 0.16), rz: chance(0.3) ? 0.12 : 0 }); solid(x - w / 2, y, z - d / 2, x + w / 2, y + 38, z + d / 2); };
   const brazier = (x, z, y) => { P.cylinder(x, y, z, 4, 34, 'ironrust', { segs: 6 }); P.cylinder(x, y + 34, z, 6, 9, 'ironrust', { segs: 8, rTop: 13 }); P.cylinder(x, y, z, 11, 3, 'ironrust', { segs: 8 }); P.sphere(x, y + 42, z, 9, 'ember', { fullbright: true, segs: 8, rings: 4, sy: 0.4 }); fire(x, y + 42, z, 15); solid(x - 9, y, z - 9, x + 9, y + 44, z + 9); light(x, y + 70, z, 250, [1, 0.5, 0.18], 1); };
 
+  // ---- Gothic set pieces (v0.33): everything in the Crypt of Hornt is built in honour of the same thing ----
+  const M4 = (x, y, z, ry = 0) => P.constructor.M(x, y, z, ry);
+  const lathe = (x, y, z, pts, tex, segs = 12, uv = [3, 2]) => P.add(new THREE.LatheGeometry(pts.map(q => new THREE.Vector2(Math.max(0.01, q[0]), q[1])), segs), tex, M4(x, y, z), { uvScale: uv });
+  // a pinnacle: shaft, flared rim, domed head, and a pair of orbs at the foot (ax: the orbs sit along x or along z)
+  const finial = (x, y, z, h, r, tex = TH.dark, ax = 0, orbs = true) => { lathe(x, y, z, [[r * 1.5, 0], [r * 1.5, h * 0.05], [r, h * 0.1], [r * 0.9, h * 0.6], [r * 0.98, h * 0.65], [r * 1.3, h * 0.7], [r * 1.34, h * 0.8], [r * 1.12, h * 0.92], [r * 0.6, h * 0.985], [0.01, h]], tex, 10, [2, Math.max(1, h / 64)]);
+    if (orbs) for (const k of [-1, 1]) P.sphere(x + (ax ? 0 : k * r * 1.5), y + r * 0.95, z + (ax ? k * r * 1.5 : 0), r * 1.02, tex, { segs: 10, rings: 7, uvScale: [2, 1] }); };
+  // the great spire: stepped plinth, twin domed chapels at the foot, a ribbed shaft pierced by glowing lancets, a flared crown and a
+  // bulbous head with a fire burning in the slit at its tip
+  const spire = (x, z, y, hh, ax) => {
+    P.cylinder(x, y, z, 52, 12, TH.dark, { segs: 8 }); P.cylinder(x, y + 12, z, 42, 10, TH.wall2, { segs: 8 });
+    const y0 = y + 22, r0 = 25, sh = hh - 22, shaft = TH.wall === 'hellrock' ? 'bloodwall' : TH.wall;   // (hell rock is too dark to read at this size: there the shaft runs with blood)
+    lathe(x, y0, z, [[r0 * 1.25, 0], [r0 * 1.25, 8], [r0, 14], [r0 * 0.92, sh * 0.3], [r0 * 0.9, sh * 0.62], [r0 * 0.96, sh * 0.66], [r0 * 1.3, sh * 0.7], [r0 * 1.4, sh * 0.74], [r0 * 1.38, sh * 0.86], [r0 * 1.16, sh * 0.94], [r0 * 0.7, sh * 0.985], [0.01, sh]], shaft, 18, [5, Math.max(2, sh / 64)]);
+    for (const f of [0.2, 0.42, 0.6]) P.cylinder(x, y0 + sh * f, z, r0 * 0.99, 7, TH.trim, { segs: 16 });
+    for (let i = 0; i < 8; i++) { const a = i / 8 * 6.283 + 0.39; P.cylinder(x + Math.cos(a) * r0 * 0.94, y0 + 14, z + Math.sin(a) * r0 * 0.94, 2.8, sh * 0.5, TH.dark, { segs: 6 }); }
+    for (let i = 0; i < 4; i++) { const a = i / 4 * 6.283; for (const f of [0.26, 0.48]) { P.box(x + Math.cos(a) * r0 * 0.9, y0 + sh * f, z + Math.sin(a) * r0 * 0.9, 6, 30, 6, 'runelight', { ry: -a, fullbright: true }); P.box(x + Math.cos(a) * r0 * 0.9, y0 + sh * f + 30, z + Math.sin(a) * r0 * 0.9, 9, 5, 9, TH.dark, { ry: -a + 0.785 }); } }
+    for (const k of [-1, 1]) { const ox = x + (ax ? 0 : k * 41), oz = z + (ax ? k * 41 : 0); P.cylinder(ox, y, oz, 20, 8, TH.dark, { segs: 10 }); P.sphere(ox, y + 24, oz, 23, shaft, { segs: 16, rings: 11, uvScale: [4, 2] }); P.cylinder(ox, y + 45, oz, 3, 10, TH.dark, { segs: 6, rTop: 0.5 }); solid(ox - 16, y, oz - 16, ox + 16, y + 44, oz + 16); }
+    P.box(x, y0 + sh - 8, z, ax ? 14 : 3, 9, ax ? 3 : 14, 'obsidian');
+    if (light(x, y0 + sh + 12, z, 320, [1, 0.34, 0.12], 1)) fire(x, y0 + sh + 1, z, 18);
+    lights += 2; light(x + (ax ? 80 : 0), y + 80, z + (ax ? 0 : 80), 420, [1, 0.55, 0.3]); light(x - (ax ? 80 : 0), y0 + sh * 0.6, z - (ax ? 0 : 80), 420, [1, 0.45, 0.25]);   // uplit, so the whole height reads against the sky
+    solid(x - 28, y, z - 28, x + 28, y + hh, z + 28);
+    ctx.decal({ at: [x + (ax ? 56 : 0), y, z + (ax ? 0 : 56)], n: 'up', w: 84, h: 84, tex: 'bloodpool', off: 0.35 });
+  };
+  // a pointed (two-centred) arch between (u0, u1) along one axis at height y: half-span s, rise k (k >= s), band t thick, d deep
+  const ogive = (cx, y, cz, s, k, t, d, alongX, tex = TH.dark) => { const Rr = (s * s + k * k) / (2 * s), th = Math.acos(Math.max(-1, Math.min(1, (s - Rr) / Rr)));
+    for (const sg of [-1, 1]) { const off = sg * (Rr - s) * -1, a0 = sg < 0 ? th : 0, a1 = sg < 0 ? Math.PI : Math.PI - th;
+      const shape = new THREE.Shape(); shape.absarc(off, 0, Rr + t, a0, a1, false); shape.absarc(off, 0, Rr, a1, a0, true);
+      const g = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false, curveSegments: 14 }); g.translate(0, 0, -d / 2); const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / 64, uv.getY(i) / 64);
+      P.add(g, [tex, tex], M4(cx, y, cz, alongX ? 0 : Math.PI / 2)); } };
+  // a free-standing Gothic gateway: two piers with pinnacles, the pointed arch, a gable with a rose and a finial on the point
+  const gotharch = (cx, cz, y, alongX, H) => { const s = 44, k = 62, ph = Math.max(70, Math.min(H - k - 60, 112));
+    for (const sg of [-1, 1]) { const px = alongX ? cx + sg * (s + 15) : cx, pz = alongX ? cz : cz + sg * (s + 15); box(px, y, pz, alongX ? 30 : 34, ph + 22, alongX ? 34 : 30, TH.wall); box(px, y, pz, alongX ? 38 : 42, 10, alongX ? 42 : 38, TH.dark); P.box(px, y + ph + 22, pz, alongX ? 36 : 40, 7, alongX ? 40 : 36, TH.trim);
+      finial(px, y + ph + 29, pz, 46, 6.5, TH.dark, alongX ? 1 : 0); solid(px - 16, y, pz - 16, px + 16, y + ph + 30, pz + 16); }
+    ogive(cx, y + ph, cz, s, k, 16, 30, alongX, TH.dark); ogive(cx, y + ph + 4, cz, s - 9, k - 12, 5, 34, alongX, TH.trim);
+    P.ring(cx, y + ph + k + 34, cz, 9, 15, 26, alongX ? 'z' : 'x', 0, Math.PI * 2, TH.dark, 14); P.sphere(cx, y + ph + k + 34, cz, 8, 'runelight', { fullbright: true, segs: 10, rings: 8 });
+    finial(cx, y + ph + k + 50, cz, 40, 5.5, TH.dark, alongX ? 0 : 1);
+  };
+
+  // an iron wheel of candles on three chains
+  const chandelier = (x, z, y, h) => { const ly = y + Math.max(104, h - 96); if (h < 150 || !light(x, ly - 6, z, 300, [1, 0.6, 0.28], 1)) return false;
+    lathe(x, ly, z, [[22, 0], [25, 0], [25, 4], [22, 4], [22, 0]], 'ironrust', 18, [4, 0.2]);
+    for (let i = 0; i < 3; i++) { const a = i / 3 * 6.283; stick([x + Math.cos(a) * 23, ly + 2, z + Math.sin(a) * 23], Math.atan2(-Math.cos(a), -Math.sin(a)), 0.3, (y + h - ly) / Math.cos(0.3), 0.9, 0.9, 'ironrust', 4); }
+    for (let i = 0; i < 6; i++) { const a = i / 6 * 6.283 + 0.5, cx = x + Math.cos(a) * 23.5, cz = z + Math.sin(a) * 23.5; P.cylinder(cx, ly + 2, cz, 1.6, 7, 'bonewall', { segs: 6, uvScale: [0.3, 0.3] }); if (i % 2 === 0) fire(cx, ly + 10, cz, 4); else P.sphere(cx, ly + 11, cz, 1.6, 'glow', { fullbright: true, segs: 6, rings: 4 }); }
+    return true; };
+
   // ---- bunker fittings ----
   const pizzaslab = (x, z, y) => { box(x, y, z, 80, 30, 80, TH.dark); box(x, y + 30, z, 94, 8, 94, TH.wall); P.pizza(x, y + 38, z, 42); solid(x - 47, y, z - 47, x + 47, y + 40, z + 47); };
   const keg = (x, z, y) => { P.cylinder(x, y, z, 11, 30, 'bunkerdark', { segs: 10, capTex: 'metal' }); for (const yy of [1, 13, 26]) P.cylinder(x, y + yy, z, 11.8, 2.5, 'metal', { segs: 10 }); P.cylinder(x + 4, y + 30, z, 2, 2, 'metal', { segs: 6 }); };
@@ -118,18 +164,38 @@ export function ruinify(ctx, o = {}) {
   const roofvent = (x, z, y) => { box(x, y, z, 44, 26, 40, ['bunkerplate', 'bunkerplate', 'grate', null, 'bunkerplate', 'bunkerplate']); P.box(x, y + 26, z, 30, 6, 26, 'bunkerdark'); solid(x - 22, y, z - 20, x + 22, y + 32, z + 20); };
   const dumpster = (x, z, y, alongX) => { const w = alongX ? 74 : 40, d = alongX ? 40 : 74; box(x, y, z, w, 42, d, ['bunkerdark', 'bunkerdark', 'metal', null, 'bunkerdark', 'bunkerdark']); P.box(x, y + 42, z, w + 3, 4, d + 3, 'bunkerrust', alongX ? { rx: 0.08 } : { rz: 0.08 }); solid(x - w / 2, y, z - d / 2, x + w / 2, y + 46, z + d / 2); };
 
+  // ---- (v0.33) the Pidser Cave is a pizza-and-sausage bunker and the office of the Hornt Crimes Unit ----
+  // a column of fat sausage links, tied off between each, floor to ceiling
+  const sausagecol = (x, z, y, h) => { const n = Math.max(2, Math.round(h / 60)), L = (h - 10) / n; for (let i = 0; i < n; i++) { const y0 = y + 5 + i * L; lathe(x, y0, z, [[3.2, 0], [9, 2.5], [12.6, 8], [13.6, L * 0.5], [12.6, L - 8], [9, L - 2.5], [3.2, L]], 'sausage_skin', 12, [2, 1]); if (i) P.cylinder(x, y0 - 2, z, 4.2, 4, 'metal', { segs: 8 }); }
+    P.cylinder(x, y, z, 17, 5, TH.dark, { segs: 10 }); P.cylinder(x, y + h - 5, z, 17, 5, TH.dark, { segs: 10 }); solid(x - 10, y, z - 10, x + 10, y + h, z + 10); };
+  // a brick pizza oven: domed, with a glowing arched mouth, a flue up to the ceiling, and a peel leaning on it
+  const pizzaoven = (x, z, y, h, n) => { const f = [[0, 1], [1, 0], [0, -1], [-1, 0]][n], ax = n % 2 === 1;
+    box(x, y, z, 80, 28, 80, TH.dark); P.box(x, y + 28, z, 84, 5, 84, TH.trim); P.sphere(x, y + 33, z, 39, 'brickred', { half: true, segs: 16, rings: 8, sy: 0.92, uvScale: [5, 2] });
+    P.box(x + f[0] * 33, y + 33, z + f[1] * 33, ax ? 16 : 40, 24, ax ? 40 : 16, 'brickdark'); P.box(x + f[0] * 41.2, y + 34, z + f[1] * 41.2, ax ? 1 : 28, 17, ax ? 28 : 1, 'lightamber', { fullbright: true });
+    P.cylinder(x - f[0] * 14, y + 66, z - f[1] * 14, 9, Math.max(8, h - 66), 'bunkerrust', { segs: 8 }); P.cylinder(x - f[0] * 14, y + 66, z - f[1] * 14, 12, 6, 'metal', { segs: 8 });
+    stick([x + f[0] * 40 + f[1] * 34, y, z + f[1] * 40 + f[0] * 34], 0, 0.12, 74, 1.3, 1.3, 'wood', 5); P.box(x + f[0] * 40 + f[1] * 34, y + 70, z + f[1] * 40 + f[0] * 34, ax ? 2 : 20, 22, ax ? 20 : 2, 'wood');
+    P.pizza(x + f[0] * 20, y + 33.5, z + f[1] * 20, 12); if (light(x + f[0] * 62, y + 44, z + f[1] * 62, 240, [1, 0.5, 0.18], 1)) fire(x + f[0] * 40, y + 34, z + f[1] * 40, 10);
+    solid(x - 42, y, z - 42, x + 42, y + 70, z + 42); };
+  // a detective's desk: a bank of monitors, a chair, a mug, a box of evidence
+  const hcudesk = (x, z, y, alongX, flip) => { const w = alongX ? 80 : 36, d = alongX ? 36 : 80, k = flip ? -1 : 1;
+    box(x, y + 28, z, w, 4, d, 'wood'); for (const q of [-1, 1]) P.box(x + (alongX ? q * 32 : 0), y, z + (alongX ? 0 : q * 32), alongX ? 12 : 30, 28, alongX ? 30 : 12, 'cabinet');
+    P.box(x + (alongX ? 0 : k * 11), y + 34, z + (alongX ? k * 11 : 0), alongX ? 46 : 3, 24, alongX ? 3 : 46, 'hcu_monitors', { fit: true, fullbright: true }); P.box(x + (alongX ? 0 : k * 11), y + 32, z + (alongX ? k * 11 : 0), alongX ? 16 : 6, 2, alongX ? 6 : 16, 'metal');
+    P.cylinder(x + (alongX ? 28 : -k * 6), y + 32, z + (alongX ? -k * 6 : 28), 2.4, 5, 'tile', { segs: 8 }); P.box(x + (alongX ? -26 : -k * 4), y + 32, z + (alongX ? -k * 4 : -26), 14, 9, 12, 'crate'); P.pizzaSquare(x + (alongX ? 8 : -k * 8), y + 32, z + (alongX ? -k * 8 : 8), 13, 13, 0.3);
+    P.chair(x + (alongX ? 0 : -k * 30), z + (alongX ? -k * 30 : 0), y, alongX ? (k > 0 ? 0 : Math.PI) : (k > 0 ? Math.PI / 2 : -Math.PI / 2));
+    light(x + (alongX ? 0 : -k * 14), y + 62, z + (alongX ? -k * 14 : 0), 150, [0.45, 0.9, 0.7]); solid(x - w / 2, y, z - d / 2, x + w / 2, y + 34, z + d / 2); };
+
   // ---------------- 1. set pieces in the open areas ----------------
   const cells = []; for (let r = 2; r < GH - 2; r++) for (let c = 2; c < GW - 2; c++) if (free(c, r)) cells.push([c, r]);
   for (let i = cells.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [cells[i], cells[j]] = [cells[j], cells[i]]; }
-  const OUT = bunker ? [['kegs', 2, 2, 2], ['crates', 2, 2, 3], ['dumpster', 3, 2, 1.4], ['dumpster', 2, 3, 1.4], ['roofvent', 2, 2, o.roof ? 5 : 0.6]] : [['house', 6, 6, 3], ['house', 5, 7, 2], ['colonnade', 7, 1, 3], ['colonnade', 1, 7, 3], ['arch', 4, 1, 2], ['arch', 1, 4, 2], ['obelisk', 2, 2, 2], ['statue', 2, 2, 2], ['altar', 3, 3, 1.4], ['graves', 5, 4, 1.6], ['tree', 1, 1, 3.2], ['gibbet', 2, 2, 1.2], ['tower', 4, 4, 1.6], ['brazier', 1, 1, 1.4], ['wallbit', 4, 1, 3], ['wallbit', 1, 4, 3]];
-  const IN = bunker ? [['pizzaslab', 3, 3, 1.6], ['kegs', 2, 2, 2.4], ['crates', 2, 2, 2.6], ['steelpillar', 1, 1, 2.6], ['hanglamp', 1, 1, 3.4], ['bench', 3, 1, 1.2], ['bench', 1, 3, 1.2]] : [['pillars', 5, 1, 2], ['pillars', 1, 5, 2], ['statue', 2, 2, 1.6], ['altar', 3, 3, 1], ['sarco', 3, 2, 2], ['sarco', 2, 3, 2], ['column', 1, 1, 3], ['gibbet', 2, 2, 0.8], ['brazier', 1, 1, 1.6], ['wallbit', 3, 1, 1.4], ['wallbit', 1, 3, 1.4]];
-  const maxBig = Math.round((o.big ?? 26) * dens), counts = {}; const cap = { house: 3, tower: 2, altar: 3, statue: 5, obelisk: 4, graves: 3, gibbet: 4, brazier: 5, pizzaslab: 4, bench: 4, hanglamp: 9, ...(o.cap || {}) };
+  const OUT = bunker ? [['kegs', 2, 2, 2], ['crates', 2, 2, 3], ['dumpster', 3, 2, 1.4], ['dumpster', 2, 3, 1.4], ['roofvent', 2, 2, o.roof ? 5 : 0.6]] : [['house', 6, 6, 3], ['house', 5, 7, 2], ['colonnade', 7, 1, 3], ['colonnade', 1, 7, 3], ['arch', 4, 1, 2], ['arch', 1, 4, 2], ['obelisk', 2, 2, 2], ['statue', 2, 2, 2], ['altar', 3, 3, 1.4], ['graves', 5, 4, 1.6], ['tree', 1, 1, 3.2], ['gibbet', 2, 2, 1.2], ['tower', 4, 4, 1.6], ['brazier', 1, 1, 1.4], ['wallbit', 4, 1, 3], ['wallbit', 1, 4, 3], ['spire', 4, 4, 5], ['gotharch', 5, 1, 2.6], ['gotharch', 1, 5, 2.6], ['finial', 1, 1, 3]];
+  const IN = bunker ? [['pizzaslab', 3, 3, 1.6], ['kegs', 2, 2, 2.4], ['crates', 2, 2, 2.6], ['steelpillar', 1, 1, 1.6], ['hanglamp', 1, 1, 3.4], ['bench', 3, 1, 1.2], ['bench', 1, 3, 1.2], ['sausagecol', 1, 1, 2.6], ['pizzaoven', 3, 3, 3.2], ['hcudesk', 3, 2, 3], ['hcudesk', 2, 3, 3], ['seal', 4, 4, 2]] : [['pillars', 5, 1, 2], ['pillars', 1, 5, 2], ['statue', 2, 2, 1.6], ['altar', 3, 3, 1], ['sarco', 3, 2, 2], ['sarco', 2, 3, 2], ['column', 1, 1, 3], ['gibbet', 2, 2, 0.8], ['brazier', 1, 1, 1.6], ['wallbit', 3, 1, 1.4], ['wallbit', 1, 3, 1.4], ['spire', 4, 4, 1.8], ['finial', 1, 1, 2.6], ['gotharch', 5, 1, 1], ['gotharch', 1, 5, 1], ['chandelier', 1, 1, 3.4]];
+  const maxBig = Math.round((o.big ?? 26) * dens * (bunker ? 1.4 : 1.25)), counts = {}; const cap = { house: 3, tower: 2, altar: 3, statue: 5, obelisk: 4, graves: 3, gibbet: 4, brazier: 5, pizzaslab: 4, bench: 4, hanglamp: 9, spire: 5, gotharch: 4, finial: 9, chandelier: 7, sausagecol: 6, pizzaoven: 3, hcudesk: 5, seal: 2, ...(o.cap || {}) };
   const weighted = list => { let t = 0; for (const k of list) t += k[3]; let v = R() * t; for (const k of list) { v -= k[3]; if (v <= 0) return k; } return list[0]; };
   for (const [c, r] of cells) {
     if (stats.big >= maxBig) break; if (!free(c, r)) continue;
     const out = !!cell(c, r).sky; if (out ? o.outdoor === false : o.indoor === false) continue;
     // try a few kinds here. Small pieces need a one-cell clear ring around them, big ones two cells.
-    let kind, w, d, e = null, ring = 2; for (let t = 0; t < 4 && !e; t++) { [kind, w, d] = weighted(out ? OUT : IN); if ((counts[kind] || 0) >= (cap[kind] ?? 99)) continue; ring = w * d <= 4 ? 1 : 2;
+    let kind, w, d, e = null, ring = 2; for (let t = 0; t < 4 && !e; t++) { [kind, w, d] = weighted(out ? OUT : IN); if ((counts[kind] || 0) >= (cap[kind] ?? 99)) continue; ring = kind === 'seal' ? 0 : w * d <= 4 || kind === 'spire' || kind === 'hcudesk' || kind === 'pizzaoven' ? 1 : 2;
       e = flat(c - ring, r - ring, w + ring * 2, d + ring * 2, kind === 'tree' || kind === 'graves' || kind === 'sarco' ? 100 : 120); }
     if (!e) continue;
     const y = e.f, H = Math.min(e.c - e.f - (out ? 12 : 0), out ? 208 : 400), x0 = c * S, z0 = r * S, x1 = (c + w) * S, z1 = (r + d) * S, mx = (x0 + x1) / 2, mz = (z0 + z1) / 2;
@@ -167,6 +233,14 @@ export function ruinify(ctx, o = {}) {
     else if (kind === 'sarco') sarcophagus(mx, mz, y, w > d);
     else if (kind === 'column') { const intact = chance(0.5); column(mx, mz, y, intact ? e.c - e.f - 14 : (e.c - e.f) * rnd(0.2, 0.6), 14, intact); if (!intact) rubble(mx, mz, y, 34, 7); }
     else if (kind === 'wallbit') { const alongX = w > d; if (alongX) wallRun(x0 + 4, mz - 8, x1 - 4, mz - 8, y, Math.min(H, rnd(70, 150)), 16, TH.wall, chance(0.4) ? 'low' : 'broken'); else wallRun(mx - 8, z0 + 4, mx - 8, z1 - 4, y, Math.min(H, rnd(70, 150)), 16, TH.wall, chance(0.4) ? 'low' : 'broken'); rubble(mx, mz, y, 44, 8); }
+    else if (kind === 'spire') { const top = e.c - e.f; if (top < 190) continue; spire(mx, mz, y, out ? Math.min(top - 30, rnd(250, 340)) : Math.min(top - 14, rnd(190, 300)), ri(0, 1)); }
+    else if (kind === 'gotharch') { const top = e.c - e.f; if (top < 250) continue; gotharch(mx, mz, y, w > d, Math.min(top - 10, 300)); }
+    else if (kind === 'finial') { const fh = Math.min(e.c - e.f - 20, rnd(60, 110)); finial(mx, y, mz, fh, 8.5, chance(0.3) ? TH.wall2 : TH.wall, ri(0, 1)); solid(mx - 10, y, mz - 10, mx + 10, y + fh, mz + 10); }
+    else if (kind === 'sausagecol') { if (e.c - e.f > 330 || e.c - e.f < 100) continue; sausagecol(mx, mz, y, e.c - e.f); }
+    else if (kind === 'pizzaoven') { if (e.c - e.f < 120) continue; pizzaoven(mx, mz, y, e.c - e.f, ri(0, 3)); }
+    else if (kind === 'hcudesk') hcudesk(mx, mz, y, w > d, chance(0.5));
+    else if (kind === 'seal') { ctx.decal({ at: [mx, y, mz], n: 'up', w: 118, h: 118, tex: 'hcu_seal', off: 0.32 }); stats.big--; }
+    else if (kind === 'chandelier') { if (!chandelier(mx, mz, y, e.c - e.f)) continue; }
     else if (kind === 'pizzaslab') pizzaslab(mx, mz, y);
     else if (kind === 'kegs') kegs(mx, mz, y);
     else if (kind === 'crates') cratestack(mx, mz, y);
@@ -175,7 +249,7 @@ export function ruinify(ctx, o = {}) {
     else if (kind === 'bench') bench(mx, mz, y, w > d);
     else if (kind === 'roofvent') roofvent(mx, mz, y);
     else if (kind === 'dumpster') dumpster(mx, mz, y, w > d);
-    counts[kind] = (counts[kind] || 0) + 1; stats.big++; take(c - ring - 1, r - ring - 1, w + ring * 2 + 2, d + ring * 2 + 2); // (and keep the next piece a cell further off)
+    counts[kind] = (counts[kind] || 0) + 1; stats.big++; (W.ruinLog || (W.ruinLog = [])).push({ kind, x: mx, z: mz, y, out }); take(c - ring - 1, r - ring - 1, w + ring * 2 + 2, d + ring * 2 + 2); // (and keep the next piece a cell further off)
   }
 
   // ---------------- 2. along the walls ----------------
@@ -190,6 +264,12 @@ export function ruinify(ctx, o = {}) {
       const room = [1, 2, 3].every(k => { const q = cell(c - dc * k, r - dr * k); return !q.solid && Math.abs(q.f - e.f) < 2; });
       const flatWall = cell(c + dc + (ax ? 0 : 1), r + dr + (ax ? 1 : 0)).solid && cell(c + dc - (ax ? 0 : 1), r + dr - (ax ? 1 : 0)).solid && !cell(c + (ax ? 0 : 1), r + (ax ? 1 : 0)).solid && !cell(c - (ax ? 0 : 1), r - (ax ? 1 : 0)).solid;
       if (!flatWall) continue;
+      if (!bunker && o.arcade !== false && h >= 168 && (ax ? r : c) % 3 === 1 && e.roof == null) {   // (v0.33) blind arcade: every third bay of a long wall is framed by a pointed arch on colonnettes
+        const a1 = cell(c + (ax ? 0 : 1), r + (ax ? 1 : 0)), a0 = cell(c - (ax ? 0 : 1), r - (ax ? 1 : 0)), w1 = cell(c + dc + (ax ? 0 : 2), r + dr + (ax ? 2 : 0)).solid, w0 = cell(c + dc - (ax ? 0 : 2), r + dr - (ax ? 2 : 0)).solid;
+        if (w0 && w1 && Math.abs(a1.f - e.f) < 2 && Math.abs(a0.f - e.f) < 2 && a1.c >= e.f + 168 && a0.c >= e.f + 168) { const px = wx - dc * 4.5, pz = wz - dr * 4.5, sp = y + 92;
+          ogive(px, sp, pz, 42, 56, 7, 7, !ax, TH.trim);
+          for (const k of [-1, 1]) { const qx = px + (ax ? 0 : k * 45.5), qz = pz + (ax ? k * 45.5 : 0); P.cylinder(qx, y + 6, qz, 3.4, 84, TH.dark, { segs: 7 }); P.box(qx, y, qz, 10, 6, 10, TH.dark); P.box(qx, sp - 4, qz, 10, 5, 10, TH.trim); }
+          stats.arcade = (stats.arcade || 0) + 1; } }
       if (bunker) {
         if (roll < 0.1 && h >= 96 && lights > 1 && !near(c, r, 4, 3)) { // a caged lamp on a bracket: the warm glow of the place
           const ty = y + Math.min(92, h - 28), px = wx - dc * 8, pz = wz - dr * 8; P.box(wx - dc * 4, ty + 6, wz - dr * 4, ax ? 8 : 5, 3, ax ? 5 : 8, 'metal'); P.cageLamp(px, ty, pz);
@@ -205,12 +285,25 @@ export function ruinify(ctx, o = {}) {
           P.box(wx - dc * 4, y + 46, wz - dr * 4, ax ? 8 : 22, 30, ax ? 22 : 8, 'cabinet'); P.cylinder(wx - dc * 3, y + 76, wz - dr * 3, 1.2, h - 76, 'metal', { segs: 5 }); used[r * GW + c] = 4; stats.wall++;
         } else if (roll < 0.34 && !near(c, r, 4, 6)) { ctx.decal({ at: [wx, y + 22, wz], n, w: 44, h: 24, tex: 'grate', off: 0.6 }); used[r * GW + c] = 6; stats.wall++;
         } else if (o.posters && roll < 0.39 && h >= 110 && !near(c, r, 5, 8)) { ctx.decal({ at: [wx, y + 72, wz], n, w: 44, h: 60, tex: pick(o.posters), off: 0.6 }); used[r * GW + c] = 8; stats.wall++;
+        } else if (roll >= 0.5 && roll < 0.56 && h >= 104 && !near(c, r, 3, 9)) { // (v0.33) a wanted poster
+          ctx.decal({ at: [wx, y + 66, wz], n, w: 38, h: 52, tex: pick(['want_marv', 'want_qoq', 'want_frenta', 'want_ballinki', 'want_bcm', 'want_beans']), off: 0.6 }); used[r * GW + c] = 9; stats.wall++;
+        } else if (roll >= 0.56 && roll < 0.59 && room && h >= 120 && !near(c, r, 6, 10)) { // the case board: photographs, notes and red string
+          ctx.decal({ at: [wx, y + 70, wz], n, w: 110, h: 69, tex: 'hcu_board', off: 0.7 }); P.box(wx - dc * 2, y + 108, wz - dr * 2, ax ? 4 : 116, 4, ax ? 116 : 4, 'wood'); used[r * GW + c] = 10; stats.wall++;
+        } else if (roll >= 0.59 && roll < 0.61 && h >= 130 && !near(c, r, 9, 11)) { ctx.decal({ at: [wx, y + 106, wz], n, w: 150, h: 38, tex: 'hcu_sign', off: 0.7, fullbright: true }); used[r * GW + c] = 11; stats.wall++;   // the unit's sign
+        } else if (roll >= 0.61 && roll < 0.635 && room && h >= 112 && lights > 1 && !near(c, r, 6, 12)) { // a wall of camera monitors
+          ctx.decal({ at: [wx, y + 70, wz], n, w: 104, h: 52, tex: 'hcu_monitors', off: 0.8, fullbright: true }); P.box(wx - dc * 3, y + 40, wz - dr * 3, ax ? 6 : 112, 4, ax ? 112 : 6, 'metal'); light(wx - dc * 30, y + 70, wz - dr * 30, 170, [0.4, 0.9, 0.65]); used[r * GW + c] = 12; stats.wall++;
+        } else if (roll >= 0.635 && roll < 0.685 && room && h >= 96 && !near(c, r, 3, 13)) { // a row of lockers
+          for (const k of [-1, 0, 1]) { const lx = wx - dc * 8 + (ax ? 0 : k * 21), lz = wz - dr * 8 + (ax ? k * 21 : 0), front = n === 'pz' ? 4 : n === 'nz' ? 5 : n === 'px' ? 0 : 1, tx = ['bunkerdark', 'bunkerdark', 'bunkerdark', null, 'bunkerdark', 'bunkerdark']; tx[front] = 'hcu_locker'; P.box(lx, y, lz, ax ? 15 : 20, 68, ax ? 20 : 15, tx, { fit: true }); }
+          solid(wx - dc * 16 - (ax ? 0 : 32), y, wz - dr * 16 - (ax ? 32 : 0), wx + (ax ? 0 : 32), y + 68, wz + (ax ? 32 : 0)); used[r * GW + c] = 13; stats.wall++;
+        } else if (roll >= 0.685 && roll < 0.715 && room && h >= 150 && !near(c, r, 7, 14)) { // a great pizza hung on the wall like a shield
+          const cy = y + Math.min(h - 54, 100), g2 = new THREE.CylinderGeometry(40, 40, 5, 28); P.add(g2, ['crust', 'pizza', 'crust'], P.constructor.M(wx - dc * 3.5, cy, wz - dr * 3.5, ax ? 0 : 0, ax ? 0 : (dr < 0 ? Math.PI / 2 : -Math.PI / 2), ax ? (dc < 0 ? -Math.PI / 2 : Math.PI / 2) : 0)); used[r * GW + c] = 14; stats.wall++;
         } else if (o.wreck && roll < 0.5 && !near(c, r, 2, 7)) { rubble(wx - dc * 16, wz - dr * 16, y, 16, ri(4, 8)); if (h >= 96) ctx.decal({ at: [wx, y + rnd(40, Math.min(h - 30, 90)), wz], n, w: 70, h: 70, tex: 'cracked', off: 0.7 }); used[r * GW + c] = 7; stats.wall++; }
         break;
       }
       if (out && room && h >= 140 && roll < 0.1 && !near(c, r, 2, 1)) { // buttress: a sloping pier leaning on the wall
         const bh = Math.min(h - 16, rnd(110, 190)), dep = 22, px = wx - dc * dep / 2, pz = wz - dr * dep / 2; box(px, y, pz, ax ? dep : 36, bh * 0.6, ax ? 36 : dep, TH.wall); box(wx - dc * 7, y + bh * 0.6, wz - dr * 7, ax ? 14 : 30, bh * 0.4, ax ? 30 : 14, TH.wall2, { top: 'rubble' });
         P.box(px, y + bh * 0.6, pz, ax ? dep + 4 : 40, 6, ax ? 40 : dep + 4, TH.trim); solid(px - (ax ? dep / 2 : 18), y, pz - (ax ? 18 : dep / 2), px + (ax ? dep / 2 : 18), y + bh * 0.6, pz + (ax ? 18 : dep / 2)); used[r * GW + c] = 1; stats.wall++;
+        finial(wx - dc * (dep - 7), y + bh * 0.6 + 6, wz - dr * (dep - 7), 40, 5, TH.dark, ax ? 1 : 0, false);                                   // (v0.33) a pinnacle on the pier
       } else if (!out && h >= 110 && roll < 0.13 && !near(c, r, 2, 2)) { // pilaster: half a column set against the wall
         const px = wx - dc * 5, pz = wz - dr * 5; box(px, y, pz, ax ? 10 : 26, h, ax ? 26 : 10, chance(0.25) ? TH.accent : TH.wall); P.box(wx - dc * 7, y, wz - dr * 7, ax ? 14 : 34, 12, ax ? 34 : 14, TH.dark); P.box(wx - dc * 7, y + h - 14, wz - dr * 7, ax ? 14 : 34, 14, ax ? 34 : 14, TH.trim); used[r * GW + c] = 2; stats.wall++;
       } else if (roll < 0.165 && h >= 110 && !near(c, r, 5, 3) && lights > 2) { // wall torch
@@ -222,7 +315,14 @@ export function ruinify(ctx, o = {}) {
       } else if (!out && roll < 0.3 && h >= 120 && !near(c, r, 3, 6)) { // chains hanging from the ceiling, sometimes with something on the end
         for (let k = 0; k < ri(1, 3); k++) { const cx = wx - dc * rnd(8, 22) + (ax ? 0 : rnd(-12, 12)), cz = wz - dr * rnd(8, 22) + (ax ? rnd(-12, 12) : 0), len = rnd(24, Math.min(h - 76, 90)); if (len < 12) continue; P.box(cx, e.c - len, cz, 1.5, len, 1.5, 'ironrust'); if (chance(0.4)) P.sphere(cx, e.c - len - 3, cz, 4, 'bonewall', { segs: 7, rings: 5, uvScale: [0.3, 0.3] }); else P.box(cx, e.c - len - 5, cz, 4, 6, 1.5, 'ironrust'); }
         used[r * GW + c] = 6; stats.wall++;
-      } else if (roll < 0.33 && !near(c, r, 3, 7)) { skulls(wx - dc * 12, wz - dr * 12, y, ri(3, 7), 9); used[r * GW + c] = 7; stats.wall++; }
+      } else if (roll < 0.33 && !near(c, r, 3, 7)) { skulls(wx - dc * 12, wz - dr * 12, y, ri(3, 7), 9); used[r * GW + c] = 7; stats.wall++;
+      } else if (roll < 0.41 && h >= 150 && !near(c, r, 2, 9) && !near(c, r, 1, 4)) { // (v0.33) a lancet window burning red from inside, under a carved hood
+        const wy = y + Math.min(h - 150, 34) + 62; ctx.decal({ at: [wx, wy, wz], n, w: 46, h: 116, tex: 'lancet', off: 0.7 }); P.box(wx - dc * 3, wy - 64, wz - dr * 3, ax ? 6 : 54, 6, ax ? 54 : 6, TH.trim);
+        if (chance(0.5) && lights > 4) light(wx - dc * 30, wy, wz - dr * 30, 150, [1, 0.3, 0.14]); used[r * GW + c] = 9; stats.wall++;
+      } else if (roll < 0.445 && h >= 230 && room && !near(c, r, 5, 10)) { // a rose window high in the wall
+        ctx.decal({ at: [wx, y + Math.min(h - 70, 190), wz], n, w: 104, h: 104, tex: 'rosewin', off: 0.7 }); used[r * GW + c] = 10; stats.wall++;
+      } else if (roll < 0.5 && room && h >= 120 && !near(c, r, 3, 11)) { // a row-end pinnacle standing against the wall
+        const fx = wx - dc * 15, fz = wz - dr * 15, fh = rnd(50, 76); finial(fx, y, fz, fh, 6.5, TH.wall2, ax ? 1 : 0); solid(fx - 7, y, fz - 7, fx + 7, y + fh, fz + 7); used[r * GW + c] = 11; stats.wall++; }
       break;
     }
   }
@@ -241,12 +341,15 @@ export function ruinify(ctx, o = {}) {
     let r = 1; while (r < GH - 1) { const e = cell(c, r); if (e.solid || e.sky || e.roof != null || e.c - e.f < 112) { r++; continue; }
       let r1 = r; while (r1 + 1 < GH - 1) { const q = cell(c, r1 + 1); if (q.solid || q.sky || q.c !== e.c || q.roof != null) break; r1++; }
       const len = r1 - r + 1; if (len >= 3 && len <= 22 && cell(c, r - 1).solid && cell(c, r1 + 1).solid && R() < 0.8 * dens) { const x = (c + 0.5) * S, z0 = r * S, z1 = (r1 + 1) * S;
-        if (bunker) { box(x, e.c - 12, (z0 + z1) / 2, 14, 12, z1 - z0, TH.accent); P.box(x, e.c - 14, (z0 + z1) / 2, 22, 2.5, z1 - z0, TH.dark); if (chance(0.6)) P.pipe(x + 20, e.c - 7, z0, x + 20, e.c - 7, z1, 3, 'metal'); if (chance(0.3)) P.pipe(x - 18, e.c - 5, z0, x - 18, e.c - 5, z1, 1.8, 'bunkerrust'); }
-        else if (chance(0.82)) { box(x, e.c - 14, (z0 + z1) / 2, 20, 14, z1 - z0, TH.dark); for (const zz of [z0 + 8, z1 - 8]) P.box(x, e.c - 30, zz, 22, 16, 16, TH.trim); }
+        if (bunker) { if (chance(0.55)) for (let zz = z0 + 12; zz < z1 - 8; zz += 13.5) { const sag = Math.sin(Math.PI * (zz - z0) / (z1 - z0)) * 12 + Math.abs(Math.sin((zz - z0) * 0.11)) * 5; P.cylinder(x - 11, e.c - 24 - sag, zz, 2.7, 11.5, 'sausage_skin', { segs: 6, rx: Math.PI / 2, uvScale: [1, 0.3] }); }   // (v0.33) strings of sausages hung to cure
+          box(x, e.c - 12, (z0 + z1) / 2, 14, 12, z1 - z0, TH.accent); P.box(x, e.c - 14, (z0 + z1) / 2, 22, 2.5, z1 - z0, TH.dark); if (chance(0.6)) P.pipe(x + 20, e.c - 7, z0, x + 20, e.c - 7, z1, 3, 'metal'); if (chance(0.3)) P.pipe(x - 18, e.c - 5, z0, x - 18, e.c - 5, z1, 1.8, 'bunkerrust'); }
+        else if (chance(0.82)) { box(x, e.c - 14, (z0 + z1) / 2, 20, 14, z1 - z0, TH.dark); for (const zz of [z0 + 8, z1 - 8]) P.box(x, e.c - 30, zz, 22, 16, 16, TH.trim);
+          const sp = (z1 - z0) / 2, hgt = e.c - e.f, rise = sp * 1.15; if (rise + 96 < hgt && sp >= 40) { ogive(x, e.c - 14 - rise - 10, (z0 + z1) / 2, sp, rise, 10, 14, false, TH.trim); stats.ribs = (stats.ribs || 0) + 1; } }  // (v0.33) a pointed rib under the beam: the halls are vaulted
         else { const l2 = (z1 - z0) * 0.45; P.box(x, e.c - 14 - l2 * 0.18, z0 + l2 / 2, 20, 14, l2, TH.dark, { rx: 0.36 }); P.box(x, e.c - 14, z1 - 20, 20, 14, 40, TH.dark); }
         stats.beams++; }
       r = r1 + 1; }
   }
+  for (let i = brush0; i < W.brushes.length; i++) W.brushes[i].deco = true;
   if (o.log || globalThis.RUINS_LOG) console.log('[ruins]', ctx.W.L.name, JSON.stringify(stats), 'lights left', lights);
   return stats;
 }

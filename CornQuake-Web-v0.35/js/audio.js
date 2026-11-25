@@ -1,10 +1,16 @@
-// Tiny WebAudio synth for Quake-ish SFX and ambience (no sample files needed).
+// Sound. Weapons that were recorded play from assets/sfx/<name>.*; every other effect, voice and ambience loop plays from the
+// sound pack (assets/sfx/sfxpack.*.bin, built by tools/sfx/make_sfx.py). The small WebAudio synth below is what you hear
+// until the pack has loaded, or if it cannot be decoded.
+const PACK_VOL = 0.8; // level of the pack against the recorded weapons
 export class Sfx {
   constructor() { this.ctx = null; this.vol = 0.7; this.music = 0.5; this.songVol = 0.7; }
   unlock() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-      this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = this.vol; this.master.connect(this.ctx.destination);
+      this.ctx = new AC(); this.master = this.ctx.createGain(); this.master.gain.value = this.vol;
+      // a limiter on the effects bus: a dozen full-level samples at once must not clip (0.8 after it takes its make-up gain back)
+      try { const lim = this.ctx.createDynamicsCompressor(), post = this.ctx.createGain(); lim.threshold.value = -4; lim.knee.value = 6; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.12; post.gain.value = 0.8; this.master.connect(lim); lim.connect(post); post.connect(this.ctx.destination); }
+      catch (e) { this.master.connect(this.ctx.destination); }
       const len = this.ctx.sampleRate * 2; this.noiseBuf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
       const d = this.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
     }
@@ -59,6 +65,45 @@ export class Sfx {
         } catch (e) { if (fmt === audioFormats()[audioFormats().length - 1]) console.warn('sfx sample failed', n, e); }
       }
     }
+    await this.loadPack();
+  }
+  // the sound pack: [uint32 header length][JSON {name: [offset, length, gain, pitch jitter, loop seconds?], "#lead": s}][one small audio file per sound].
+  // "name", "name#2", "name#3" are takes of the same sound; play() picks one at random.
+  async loadPack() {
+    for (const [ext] of audioFormats()) {
+      if (ext === '.mp3') continue;
+      try {
+        const r = await fetch('assets/sfx/sfxpack' + ext + '.bin'); if (!r.ok) continue;
+        const ab = await r.arrayBuffer(), hl = new DataView(ab).getUint32(0, true);
+        const head = JSON.parse(new TextDecoder().decode(new Uint8Array(ab, 4, hl))), lead = head['#lead'] || 0; delete head['#lead']; // lead: silence in front of every file of this format
+        const keys = Object.keys(head), base = 4 + hl, got = {};
+        // all at once: the browser decodes off the main thread, and a busy frame loop then holds nothing up
+        await Promise.all(keys.map(k => new Promise(res => { const [o, n] = head[k]; try { const pr = this.ctx.decodeAudioData(ab.slice(base + o, base + o + n), b => { got[k] = b; res(); }, () => res()); if (pr && pr.catch) pr.catch(() => res()); } catch (e) { res(); } })));
+        if (Object.keys(got).length < keys.length * 0.9) { console.warn('sfx pack: could not decode', ext); continue; } // try the next format
+        const pack = {};
+        for (const k of keys) if (got[k]) { this.buf[k] = got[k]; const name = k.split('#')[0]; (pack[name] = pack[name] || []).push({ key: k, gain: head[k][2], jit: head[k][3], loop: head[k][4] || 0, lead }); }
+        this.pack = pack; this.packFormat = ext; this.packLoaded(); return;
+      } catch (e) { console.warn('sfx pack failed', ext, e); }
+    }
+  }
+  packLoaded() { // anything already running on the synth (level ambience, a held trigger) is rebuilt from the pack
+    const kill = l => { for (const n of l || []) { try { n.stop(); } catch (e) { } } };
+    if (this.loops) { for (const l of Object.values(this.loops)) { l.gain.disconnect(); kill(l.nodes); } this.loops = null; }
+    if (this.sauceNode) { this.sauceNode.disconnect(); kill(this.sauceSrc); this.sauceNode = null; }
+    if (this.spinNode) { this.spinNode.g.disconnect(); kill([this.spinNode.o || this.spinNode.s]); this.spinNode = null; }
+    if (this.amb) this.startAmbient(this.ambKind);
+  }
+  playPack(name, vol = 1) {
+    const P = this.pack && this.pack[name]; if (!P || !this.ctx) return null;
+    const now = this.ctx.currentTime, at = this.lastAt || (this.lastAt = {}), lv = this.lastVar || (this.lastVar = {});
+    if (now - (at[name] ?? -1) < 0.03) return null; at[name] = now; // the same sound twice in one frame would only add level
+    let i = (Math.random() * P.length) | 0; if (P.length > 1 && i === lv[name]) i = (i + 1) % P.length; lv[name] = i; // never the same take twice running
+    const e = P[i]; return this.sample(e.key, e.gain * PACK_VOL * vol, 1 + (Math.random() * 2 - 1) * e.jit, e.lead);
+  }
+  loopSrc(name, dest, rate = 1) { // a seamless loop from the pack: each loop file carries half a second of its next lap, so the loop points sit safely inside it
+    const e = this.pack && this.pack[name] && this.pack[name][0], b = e && this.buf[e.key]; if (!b || !e.loop) return null;
+    const s = this.ctx.createBufferSource(); s.buffer = b; s.loop = true; s.loopStart = 0.2; s.loopEnd = 0.2 + e.loop; s.playbackRate.value = rate;
+    s.connect(dest); s.start(0, 0.2 + Math.random() * e.loop * 0.9); return s; // (the lead-in of the AAC files only moves the loop window, which has room)
   }
   sample(name, vol = 1, rate = 1, offset = 0) {
     const b = this.buf && this.buf[name]; if (!b || !this.ctx) return null;
@@ -93,7 +138,9 @@ export class Sfx {
       if (name === 'shotgun' && this.buf.shotgun) { this.sample('shotgun', 0.85, 0.97 + Math.random() * 0.06); return; }
       if (name === 'turdLaunch' && this.buf.fart) { this.sample('fart', 1, 0.9 + Math.random() * 0.2); return; }
       if (name === 'candyShot' && this.buf.candygun) return; // the machine-gun loop covers every shot
+      if (name === 'fart' && this.buf.fart) { this.sample('fart', 0.75, 0.64 + Math.random() * 0.14); return; } // the same recording, lower and longer than the launcher's
     }
+    if (this.pack && this.pack[name]) { this.playPack(name); return; }
     switch (name) {
       case 'door': this.noise(1.1, 300, 2, 0.35, 0, 'lowpass', 120); this.tone('sawtooth', 55, 45, 1.0, 0.08); this.noise(0.25, 900, 3, 0.3, 1.0, 'bandpass'); break;
       case 'doorstop': this.noise(0.25, 700, 3, 0.35, 0, 'bandpass'); this.tone('square', 90, 60, 0.15, 0.1); break;
@@ -109,6 +156,9 @@ export class Sfx {
       case 'talk': this.tone('square', 330, 0, 0.06, 0.06); break;
       case 'qoqSight': this.tone('sawtooth', 140, 90, 0.18, 0.22); this.tone('sawtooth', 110, 70, 0.22, 0.22, 0.2); this.noise(0.12, 600, 2, 0.12, 0.2, 'bandpass'); break;
       case 'qoqPain': this.tone('sawtooth', 180, 120, 0.15, 0.2); break;
+      case 'ratSqueak': this.tone('square', 2900 + Math.random() * 700, 2200, 0.05, 0.07); this.tone('square', 3300 + Math.random() * 500, 2500, 0.06, 0.06, 0.07); break;
+      case 'ratBite': this.noise(0.05, 3000, 2, 0.16, 0, 'highpass'); this.tone('square', 900, 300, 0.07, 0.12); break;
+      case 'ratDie': this.tone('square', 3200, 700, 0.22, 0.1); this.noise(0.1, 900, 1, 0.1, 0.02); break;
       case 'qoqDeath': this.tone('sawtooth', 160, 50, 0.9, 0.25); this.noise(0.4, 400, 1, 0.15, 0.1); break;
       case 'chickenThrow': this.noise(0.25, 900, 1, 0.15, 0, 'bandpass', 300); this.bawk(0.05); break;
       case 'chickenHit': this.bawk(0); this.bawk(0.12); this.noise(0.2, 2500, 1, 0.2, 0, 'highpass'); break;
@@ -197,6 +247,7 @@ export class Sfx {
   }
   thunder(loud = 1, close = false) { // rolling thunder; a close strike starts with a sharp crack
     if (!this.ctx) return; const c = this.ctx, t = c.currentTime, v = Math.min(1, loud);
+    if (this.pack && this.pack.thunderFar) { this.playPack(close ? 'thunderClose' : 'thunderFar', v); return; }
     if (close) { this.noise(0.25, 3000, 0.7, 0.5 * v, 0, 'highpass'); this.noise(0.6, 900, 0.8, 0.45 * v, 0.02, 'lowpass', 200); }
     for (let k = 0; k < 4; k++) { const at = 0.05 + k * (0.35 + Math.random() * 0.4), dur = 1.2 + Math.random() * 1.6; this.noise(dur, 160 + Math.random() * 90, 0.9, (0.5 - k * 0.08) * v, at, 'lowpass', 60); }
     const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(48, t); o.frequency.exponentialRampToValueAtTime(30, t + 2.5);
@@ -219,14 +270,15 @@ export class Sfx {
   }
   makeLoop(type) {
     const c = this.ctx, g = c.createGain(); g.gain.value = 0; g.connect(this.master);
-    const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true; const f = c.createBiquadFilter();
-    if (type === 'hum') { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 58; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; const og = c.createGain(); og.gain.value = 0.25; o.connect(lp); lp.connect(og); og.connect(g); o.start(); f.type = 'bandpass'; f.frequency.value = 120; }
+    const ls = this.loopSrc('loop_' + (LOOPS[type] ? type : 'steam'), g); if (ls) return { gain: g, vol: LOOPS[type] || 0.4, nodes: [ls] };
+    const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true; const f = c.createBiquadFilter(), nodes = [src];
+    if (type === 'hum') { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 58; const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 240; const og = c.createGain(); og.gain.value = 0.25; o.connect(lp); lp.connect(og); og.connect(g); o.start(); nodes.push(o); f.type = 'bandpass'; f.frequency.value = 120; }
     else if (type === 'fire') { f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6; }
-    else if (type === 'wind') { f.type = 'lowpass'; f.frequency.value = 500; const l = c.createOscillator(); l.frequency.value = 0.15; const lg = c.createGain(); lg.gain.value = 300; l.connect(lg); lg.connect(f.frequency); l.start(); }
-    else if (type === 'machine') { f.type = 'lowpass'; f.frequency.value = 300; const l = c.createOscillator(); l.type = 'square'; l.frequency.value = 2.2; const lg = c.createGain(); lg.gain.value = 0.5; const am = c.createGain(); am.gain.value = 0.5; l.connect(lg); lg.connect(am.gain); src.connect(f); f.connect(am); am.connect(g); src.start(); l.start(); return { gain: g, vol: 0.5 }; }
+    else if (type === 'wind') { f.type = 'lowpass'; f.frequency.value = 500; const l = c.createOscillator(); l.frequency.value = 0.15; const lg = c.createGain(); lg.gain.value = 300; l.connect(lg); lg.connect(f.frequency); l.start(); nodes.push(l); }
+    else if (type === 'machine') { f.type = 'lowpass'; f.frequency.value = 300; const l = c.createOscillator(); l.type = 'square'; l.frequency.value = 2.2; const lg = c.createGain(); lg.gain.value = 0.5; const am = c.createGain(); am.gain.value = 0.5; l.connect(lg); lg.connect(am.gain); src.connect(f); f.connect(am); am.connect(g); src.start(); l.start(); nodes.push(l); return { gain: g, vol: 0.5, nodes }; }
     else { f.type = 'highpass'; f.frequency.value = 2000; }
     src.connect(f); f.connect(g); src.start();
-    return { gain: g, vol: type === 'hum' ? 0.35 : type === 'fire' ? 0.25 : type === 'wind' ? 0.5 : 0.15 };
+    return { gain: g, vol: type === 'hum' ? 0.35 : type === 'fire' ? 0.25 : type === 'wind' ? 0.5 : 0.15, nodes };
   }
   updateAmbient(p) {
     if (!this.ctx || !this.emit) return; if (!this.loops) this.setAmbientEmitters(this.emit);
@@ -236,6 +288,14 @@ export class Sfx {
   }
   spin(v) { // gatling whirr of the candy corn gun, pitch follows barrel speed
     if (!this.ctx) return;
+    if (!this.spinNode) {
+      const g = this.ctx.createGain(); g.gain.value = 0; const s = this.loopSrc('loop_spin', g, 0.45);
+      if (s) { g.connect(this.master); this.spinNode = { g, s }; }
+    }
+    if (this.spinNode && this.spinNode.s) { // the recorded-style motor: playback speed follows the barrels
+      if (!v) this.mg(false);
+      const t = this.ctx.currentTime; this.spinNode.g.gain.setTargetAtTime(v * 0.3, t, 0.05); this.spinNode.s.playbackRate.setTargetAtTime(0.45 + v * 1.55, t, 0.08); return;
+    }
     if (!this.spinNode) {
       const o = this.ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 60;
       const f = this.ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
@@ -248,15 +308,19 @@ export class Sfx {
   sauce(on, v = 1) { // the sauce gun: a glugging, bubbling marinara stream
     if (!this.ctx) return;
     if (!this.sauceNode) {
+      const g = this.ctx.createGain(); g.gain.value = 0; const ls = this.loopSrc('loop_sauce', g);
+      if (ls) { g.connect(this.master); this.sauceNode = g; this.sauceSrc = [ls]; this.sauceVol = 0.75; }
+    }
+    if (!this.sauceNode) {
       const c = this.ctx, s = c.createBufferSource(); s.buffer = this.noiseBuf; s.loop = true;
       const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 500; f.Q.value = 3;
       const lfo = c.createOscillator(); lfo.type = 'square'; lfo.frequency.value = 11; const lg = c.createGain(); lg.gain.value = 260; lfo.connect(lg); lg.connect(f.frequency); lfo.start();
       const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 70; const og = c.createGain(); og.gain.value = 0.35;
       const lfo2 = c.createOscillator(); lfo2.frequency.value = 7; const lg2 = c.createGain(); lg2.gain.value = 25; lfo2.connect(lg2); lg2.connect(o.frequency); lfo2.start();
       const g = c.createGain(); g.gain.value = 0; s.connect(f); f.connect(g); o.connect(og); og.connect(g); g.connect(this.master); s.start(); o.start();
-      this.sauceNode = g;
+      this.sauceNode = g; this.sauceSrc = [s, o, lfo, lfo2]; this.sauceVol = 0.32;
     }
-    this.sauceNode.gain.setTargetAtTime(on ? 0.32 * v : 0, this.ctx.currentTime, on ? 0.02 : 0.06);
+    this.sauceNode.gain.setTargetAtTime(on ? this.sauceVol * v : 0, this.ctx.currentTime, on ? 0.02 : 0.06);
   }
   spray(on) { // looping stream while the soaker fires: the recorded watering hose, or a filtered-noise hiss until it loads
     if (!this.ctx) return;
@@ -278,24 +342,28 @@ export class Sfx {
   }
   // ambient: low drone + drips; rain bed whose gain is set per frame
   startAmbient(kind) {
-    if (!this.ctx) return; this.stopAmbient();
+    if (!this.ctx) return; this.stopAmbient(); this.ambKind = kind;
     const c = this.ctx, out = c.createGain(); out.gain.value = 0; out.connect(this.master); out.gain.linearRampToValueAtTime(this.music * 0.5, c.currentTime + 2);
     const nodes = [out];
     const base = kind === 'street' ? 49 : kind === 'kitchen' ? 41.2 : 36.7;
-    for (const det of [0, 0.6, -0.4]) {
+    const dg = c.createGain(); dg.gain.value = 0.5; dg.connect(out); const drone = this.loopSrc('loop_drone', dg, base / 36.7); if (drone) nodes.push(drone);
+    for (const det of drone ? [] : [0, 0.6, -0.4]) {
       const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = base * (1 + det / 100) * (det < 0 ? 1.5 : 1);
       const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 180; const g = c.createGain(); g.gain.value = 0.06;
       const lfo = c.createOscillator(); lfo.frequency.value = 0.07 + Math.random() * 0.05; const lg = c.createGain(); lg.gain.value = 60; lfo.connect(lg); lg.connect(f.frequency); lfo.start();
       o.connect(f); f.connect(g); g.connect(out); o.start(); nodes.push(o, lfo);
     }
-    const rs = c.createBufferSource(); rs.buffer = this.noiseBuf; rs.loop = true; const rf = c.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1200;
-    const rg = c.createGain(); rg.gain.value = 0; rs.connect(rf); rf.connect(rg); rg.connect(this.master); rs.start(); nodes.push(rs);
-    this.rainGain = rg; this.amb = nodes;
-    this.dripTimer = setInterval(() => { if (Math.random() < 0.5) this.tone('sine', 1400 + Math.random() * 900, 500, 0.12, 0.04 * this.music); }, 1700);
+    const rg = c.createGain(); rg.gain.value = 0; rg.connect(this.master);
+    let rs = this.loopSrc('loop_rain', rg); this.rainK = 0.28;
+    if (!rs) { rs = c.createBufferSource(); rs.buffer = this.noiseBuf; rs.loop = true; const rf = c.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 1200; rs.connect(rf); rf.connect(rg); rs.start(); this.rainK = 0.045; }
+    nodes.push(rs); this.rainGain = rg; this.amb = nodes;
+    this.dripTimer = setInterval(() => { if (Math.random() < 0.5 && !this.playPack('drip', this.music)) this.tone('sine', 1400 + Math.random() * 900, 500, 0.12, 0.04 * this.music); }, 1700);
   }
-  setRain(v) { if (this.rainGain) this.rainGain.gain.setTargetAtTime(v * 0.045, this.ctx.currentTime, 0.3); }
+  setRain(v) { if (this.rainGain) this.rainGain.gain.setTargetAtTime(v * (this.rainK || 0.045), this.ctx.currentTime, 0.3); }
   stopAmbient() { if (this.amb) { for (const n of this.amb) { try { n.stop ? n.stop() : n.disconnect(); } catch (e) { } } this.amb = null; } clearInterval(this.dripTimer); if (this.rainGain) { this.rainGain.disconnect(); this.rainGain = null; } }
 }
+
+const LOOPS = { hum: 0.45, fire: 0.4, wind: 0.45, machine: 0.25 }; // ambience loops in the pack, and their level
 
 // ---- web audio formats ----
 const FORMATS = [['.webm', 'audio/webm', 'audio/webm; codecs="opus"'], ['.mp4', 'audio/mp4', 'audio/mp4; codecs="mp4a.40.2"'], ['.mp3', 'audio/mpeg', 'audio/mpeg']];

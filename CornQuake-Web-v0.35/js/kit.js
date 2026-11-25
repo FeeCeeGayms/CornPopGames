@@ -28,6 +28,7 @@ export function makeLevel(meta, w, h, defaultSolidTex, fn) {
   const SOLID = K.solid(defaultSolidTex);
   for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) g[r][c] = SOLID;
   K.isSolid = (c, r) => !!(legend[g[r]?.[c]] && legend[g[r][c]].solid);
+  K.rawCell = (c, r) => g[r]?.[c]; K.finish = [];   // (v0.33) K.finish: steps that run once the map has drawn itself (the New York kit digs its subway there)
   K.spec = (c, r) => legend[g[r][c]];
   K.paint = (c0, r0, c1, r1, ch) => { for (let r = Math.max(0, r0); r <= Math.min(h - 1, r1); r++) for (let c = Math.max(0, c0); c <= Math.min(w - 1, c1); c++) g[r][c] = ch; };
   // a room: retextures surrounding solid cells, then opens the interior. spec = {f,c,floor,ceil,side,upper,sky}
@@ -323,6 +324,7 @@ export function makeLevel(meta, w, h, defaultSolidTex, fn) {
   K.ruins = (o = {}) => post(ctx => ruinify({ ...ctx, goals }, o));
 
   fn(K);
+  for (const f of K.finish) f();
   const map = g.map(row => row.join(''));
   return {
     ...meta, map, legend, doors, defaultWall: defaultSolidTex, botGoals: goals,

@@ -1,19 +1,17 @@
-CornPop in the Pidser Cave - web version
-=========================================
+CornQuake - web version
+=======================
 
-Two ways to play in a browser:
-
-1) Just open it
-   Open CornPop-v0.20.html (the single file) in Chrome, Edge, Firefox or Safari.
-   Everything is inside that one file, so it works offline, straight from your computer.
-   It's about 35 MB, so give it a few seconds to load.
-
-2) Put it on a website (this folder)
-   Upload everything in this folder to any static web host: itch.io (upload the zip as an
-   "HTML" game), GitHub Pages, Netlify, your own server, and so on. index.html is the start page.
+Put this folder on a website
+   Upload everything in this folder to any static web host: GitHub Pages, itch.io (upload the zip as an
+   "HTML" game), Netlify, your own server, and so on. index.html is the start page.
    Browsers block games like this when index.html is opened straight from disk, so to test
    this folder on your own computer, run a small local server in it, for example:
        python -m http.server 8000      then open http://localhost:8000
+
+v0.35: new sound effects everywhere: creature voices, explosions, doors, pickups, thunder, rain and room ambience.
+v0.34: the game is now called CornQuake and opens on a live title screen.
+v0.33: PBR surfaces, rebuilt weapons, Gothic crypt, New York subways with rats, the Hornt Crimes Unit.
+If it runs slowly, open Options and turn "PBR materials" off or pick a lower graphics preset.
 
 Asset formats (web friendly):
    music and sound   Opus in WebM (.webm), with AAC (.mp4) for browsers without Opus (older Safari)

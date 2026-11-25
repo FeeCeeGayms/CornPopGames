@@ -6,6 +6,7 @@
 //   9  BIG FONDUE GUN     (BFG)               a molten cheese ball that zaps nearby enemies with cheese strings, then erupts
 import * as THREE from 'three';
 import { Std, vmKey, squashDepth, segAabb } from './combat.js';
+import * as GUNS from './guns.js';
 
 export const W2 = {
   cola:   { slot: 5, gun: 'colagun',   ammoItem: 'colapack',  name: 'FIZZ LAUNCHER',     label: 'COLA',   max: 30,  pickup: 10,  box: 5,  low: 3,  col: '#ff6a50', dark: '#8a1a10', pip: '#ff4030',
@@ -57,34 +58,7 @@ function kit(g) {
   const cyl = (r, l, mat, x, y, z, segs = 16, r2 = r) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r2, l, segs), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
   return { box, cyl };
 }
-export function makeColaCan(s = 1) {
-  const g = new THREE.Group();
-  const red = new THREE.MeshBasicMaterial({ color: 0xd8141a }), silver = new THREE.MeshBasicMaterial({ color: 0xc8ccd4 }), white = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  const b = new THREE.Mesh(new THREE.CylinderGeometry(2.7 * s, 2.7 * s, 8 * s, 12), red); g.add(b);
-  for (const y of [-4.3, 4.3]) { const e = new THREE.Mesh(new THREE.CylinderGeometry(2.3 * s, 2.6 * s, 0.8 * s, 12), silver); e.position.y = y * s; if (y < 0) e.rotation.x = Math.PI; g.add(e); }
-  const w = new THREE.Mesh(new THREE.TorusGeometry(2.75 * s, 0.35 * s, 4, 16), white); w.rotation.x = Math.PI / 2 + 0.25; w.position.y = 0.5 * s; g.add(w);
-  const tab = new THREE.Mesh(new THREE.BoxGeometry(1.2 * s, 0.3 * s, 1.8 * s), silver); tab.position.set(0.5 * s, 4.8 * s, 0); g.add(tab);
-  g.userData.mats = [red, silver, white]; return g;
-}
-export function makeFizzLauncher() {
-  const g = new THREE.Group(), { box, cyl } = kit(g);
-  const red = Std({ color: 0xc81820, roughness: 0.35, metalness: 0.15 }), redD = Std({ color: 0x7a0c10, roughness: 0.4, metalness: 0.1 });
-  const silver = Std({ color: 0xc8ccd4, roughness: 0.15, metalness: 0.9 }), white = Std({ color: 0xf4f4f0, roughness: 0.4, metalness: 0 });
-  const grip = Std({ color: 0x2a2a2e, roughness: 0.6, metalness: 0.1 }), cap = Std({ color: 0xe8b020, roughness: 0.25, metalness: 0.7 });
-  cyl(4.4, 26, red, 0, 0, -13); cyl(4.6, 1.4, white, 0, 0, -9); cyl(4.6, 1.4, white, 0, 0, -18);
-  const flare = cyl(4.6, 5, silver, 0, 0, -27.5, 16, 6.2); flare.rotation.x = -Math.PI / 2;          // flared muzzle
-  const drum = new THREE.Group(); drum.position.set(0, -0.5, -1); g.add(drum);                              // revolving six-pack drum
-  const dr = new THREE.Mesh(new THREE.CylinderGeometry(6.6, 6.6, 9, 18), silver); dr.rotation.x = Math.PI / 2; drum.add(dr);
-  const cans = []; for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, c = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 9.4, 10), k % 2 ? red : redD); c.rotation.x = Math.PI / 2; c.position.set(Math.cos(a) * 4.6, Math.sin(a) * 4.6, 0); drum.add(c); cans.push(c); }
-  const loaded = makeColaCan(0.95); loaded.rotation.x = Math.PI / 2; loaded.position.set(0, 0, -25); g.add(loaded);
-  box(2, 2.4, 10, redD, 0, 5.2, -12); const bc = cyl(1.6, 1.6, cap, 0, 7.2, -16, 12); bc.rotation.x = 0;   // bottle-cap sight
-  for (let k = 0; k < 8; k++) { const t = box(0.4, 1.7, 0.6, cap, 1.7 * Math.cos(k * 0.785), 7.2, -16 + 1.7 * Math.sin(k * 0.785)); t.rotation.y = -k * 0.785; }
-  const gr = box(3.2, 7, 3.4, grip, 0, -6.5, 1); gr.rotation.x = -0.25; box(3, 6, 3, grip, 0, -6, -15);
-  box(0.9, 2.6, 1.4, silver, 0, -3.8, -1.6);
-  g.userData = { drum, loaded, cans, mats: [red, redD, silver, white, grip, cap], base: [0xc81820, 0x7a0c10, 0xc8ccd4, 0xf4f4f0, 0x2a2a2e, 0xe8b020], muzzle: new THREE.Vector3(0, 0, -30) };
-  return g;
-}
-export function makeSauceGun() {
+function _makeSauceGun() {
   const g = new THREE.Group(), { box, cyl } = kit(g);
   const steel = Std({ color: 0xb8bcc4, roughness: 0.18, metalness: 0.9 }), dark = Std({ color: 0x34363c, roughness: 0.3, metalness: 0.6 });
   const copper = Std({ color: 0xd07840, roughness: 0.2, metalness: 0.9 }), lid = Std({ color: 0xd4a020, roughness: 0.25, metalness: 0.8 });
@@ -106,7 +80,7 @@ export function makeSauceGun() {
   g.userData = { coil, sauce, tip, mats: [steel, dark, copper, lid, wood, label], base: [0xb8bcc4, 0x34363c, 0xd07840, 0xd4a020, 0x6a4024, 0xf0ead0], muzzle: new THREE.Vector3(0, 0, -26) };
   return g;
 }
-export function makeRailgun() {
+function _makeRailgun() {
   const g = new THREE.Group(), { box, cyl } = kit(g);
   const navy = Std({ color: 0x24345a, roughness: 0.25, metalness: 0.7 }), dark = Std({ color: 0x15181f, roughness: 0.3, metalness: 0.6 });
   const silver = Std({ color: 0xd0d4dc, roughness: 0.12, metalness: 0.95 }), boxM = Std({ color: 0x1e50c8, roughness: 0.45, metalness: 0 });
@@ -124,7 +98,7 @@ export function makeRailgun() {
   g.userData = { coil, noodleM, mats: [navy, dark, silver, boxM, yel], base: [0x24345a, 0x15181f, 0xd0d4dc, 0x1e50c8, 0xffd040], muzzle: new THREE.Vector3(0, 0, -38) };
   return g;
 }
-export function makeJellyBlaster() {
+function _makeJellyBlaster() {
   const g = new THREE.Group(), { box, cyl } = kit(g);
   const white = Std({ color: 0xf0f0ea, roughness: 0.3, metalness: 0.05 }), grey = Std({ color: 0x8a8c94, roughness: 0.25, metalness: 0.6 });
   const jellyM = new THREE.MeshStandardMaterial({ color: 0x40e050, transparent: true, opacity: 0.78, roughness: 0.05, metalness: 0, emissive: 0x40e050, emissiveIntensity: 0.35 });
@@ -140,7 +114,7 @@ export function makeJellyBlaster() {
   g.userData = { jelly, jellyM, core, mats: [white, grey], base: [0xf0f0ea, 0x8a8c94], muzzle: new THREE.Vector3(0, 0, -25) };
   return g;
 }
-export function makeFondueGun() {
+function _makeFondueGun() {
   const g = new THREE.Group(), { box, cyl } = kit(g);
   const enamel = Std({ color: 0xd85a18, roughness: 0.25, metalness: 0.2 }), enamelD = Std({ color: 0x8a3008, roughness: 0.3, metalness: 0.2 });
   const black = Std({ color: 0x1c1c20, roughness: 0.5, metalness: 0.3 }), steel = Std({ color: 0xc0c4cc, roughness: 0.15, metalness: 0.9 });
@@ -162,6 +136,12 @@ export function makeFondueGun() {
   g.userData = { ch, bubbles, burner, cheese, mats: [enamel, enamelD, black, steel, bread, wood], base: [0xd85a18, 0x8a3008, 0x1c1c20, 0xc0c4cc, 0xd8a860, 0x5a3820], muzzle: new THREE.Vector3(0, 0, -17) };
   return g;
 }
+export function makeColaCan(s = 1) { return GUNS.makeColaCan(s); }
+export function makeFizzLauncher() { return GUNS.makeFizzLauncher(); }
+export function makeSauceGun() { return GUNS.refine(_makeSauceGun()); }
+export function makeRailgun() { return GUNS.refine(_makeRailgun()); }
+export function makeJellyBlaster() { return GUNS.refine(_makeJellyBlaster()); }
+export function makeFondueGun() { return GUNS.refine(_makeFondueGun()); }
 const GUN_MODELS = { colagun: makeFizzLauncher, saucegun: makeSauceGun, railgun: makeRailgun, jellygun: makeJellyBlaster, fonduegun: makeFondueGun };
 
 // ---------------------------------------------------------------- pickups (weapon models + ammo)
@@ -223,8 +203,8 @@ class VWeapon {
     this.holder.position.set(Math.sin(t * 5.2) * 0.5 * sp + sx, bob * 0.1 - this.raise * 10 + Math.abs(Math.cos(t * 5.2)) * 0.3 * sp + sy, this.kick * kz);
     this.holder.rotation.set(this.kick * kr, 0, (player.roll || 0) * 2);
     const L = g.pointLight(player.eye()), u = this.model.userData;
-    const k = [Math.min(1.6, 0.35 + L[0] * 0.8), Math.min(1.6, 0.35 + L[1] * 0.8), Math.min(1.6, 0.35 + L[2] * 0.8)];
-    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); });
+    const k = [Math.min(1.15, 0.3 + L[0] * 0.75), Math.min(1.15, 0.3 + L[1] * 0.75), Math.min(1.15, 0.3 + L[2] * 0.75)];
+    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); m.envMapIntensity = 0.15 + 0.6 * (k[0] + k[1] + k[2]) / 3; });
   }
   tick(dt) { this.cool -= dt; this.emptyT -= dt; this.raise = Math.max(0, this.raise - dt * 5); }
   render(renderer, camera) {
@@ -234,13 +214,13 @@ class VWeapon {
 }
 
 class FizzLauncher extends VWeapon {
-  constructor(game) { super(game, 'cola', makeFizzLauncher(), [5.4, -5.4, -10.5], 0.38, [0.05, 0.07, -0.03]); this.drumA = 0; this.drumT = 0; }
+  constructor(game) { super(game, 'cola', makeFizzLauncher(), [5.7, -4.3, -11.8], 0.36, [0.06, 0.17, -0.03]); this.drumA = 0; this.drumT = 0; }
   update(dt, firing, cam, pl) {
     const g = this.game, D = this.def; this.tick(dt);
     if (firing && this.raise < 0.3 && this.cool <= 0) {
       if (this.ammo <= 0) this.empty('Out of cola! Find a six-pack.');
       else {
-        this.ammo--; this.cool = D.cooldown; this.kick = 1; this.drumT += Math.PI / 3; g.sfx.play('colaLaunch'); g.noiseT = 1.2; g.input.rumble(0.5, 0.6, 140);
+        this.ammo--; this.cool = D.cooldown; this.kick = 1; this.drumT += Math.PI / 3; g.sfx.play('colaLaunch'); g.flashLight(g.player.eye(), [1, 0.6, 0.5], 380, 0.1);  g.noiseT = 1.2; g.input.rumble(0.5, 0.6, 140);
         const d = this.dir(cam), from = this.muzzleWorld(cam), pv = pl.vel;
         g.arsenal.spawnCan(from, [d.x * D.speed + pv[0] * 0.3, d.y * D.speed + D.lift, d.z * D.speed + pv[2] * 0.3]);
         for (let k = 0; k < 10; k++) g.particles.spawn(from, [d.x * 140 + (Math.random() - 0.5) * 90, d.y * 140 + Math.random() * 70, d.z * 140 + (Math.random() - 0.5) * 90], Math.random() < 0.5 ? [0.95, 0.9, 0.8] : [0.45, 0.2, 0.08], 0.5, -30, 2.5);
@@ -254,7 +234,7 @@ class FizzLauncher extends VWeapon {
   }
 }
 class SauceGun extends VWeapon {
-  constructor(game) { super(game, 'sauce', makeSauceGun(), [4.6, -5.6, -10], 0.4, [0.05, 0.06, -0.02]); this.spin = 0; }
+  constructor(game) { super(game, 'sauce', makeSauceGun(), [4.8, -4.7, -10.6], 0.4, [0.06, 0.12, -0.02]); this.spin = 0; }
   update(dt, firing, cam, pl) {
     const g = this.game, D = this.def; this.tick(dt);
     this.firing = false;
@@ -275,13 +255,13 @@ class SauceGun extends VWeapon {
   }
 }
 class SpaghettiRail extends VWeapon {
-  constructor(game) { super(game, 'rail', makeRailgun(), [3.8, -5.2, -9.5], 0.38, [0.05, 0.05, -0.02]); }
+  constructor(game) { super(game, 'rail', makeRailgun(), [4.0, -4.4, -10], 0.38, [0.06, 0.11, -0.02]); }
   update(dt, firing, cam, pl) {
     const g = this.game, D = this.def; this.tick(dt);
     if (firing && this.raise < 0.3 && this.cool <= 0) {
       if (this.ammo <= 0) this.empty('Out of noodles! Find a box of spaghetti.');
       else {
-        this.ammo--; this.cool = D.cooldown; this.kick = 1; g.sfx.play('railFire'); g.noiseT = 1.5; g.input.rumble(0.7, 0.8, 200);
+        this.ammo--; this.cool = D.cooldown; this.kick = 1; g.sfx.play('railFire'); g.flashLight(g.player.eye(), [1, 0.9, 0.6], 600, 0.14);  g.noiseT = 1.5; g.input.rumble(0.7, 0.8, 200);
         g.arsenal.railShot(cam, pl, this.muzzleWorld(cam)); pl.landKick = Math.min(10, (pl.landKick || 0) + 2);
       }
     }
@@ -293,7 +273,7 @@ class SpaghettiRail extends VWeapon {
   }
 }
 class JellyBlaster extends VWeapon {
-  constructor(game) { super(game, 'jelly', makeJellyBlaster(), [4.6, -5.4, -10], 0.4, [0.05, 0.06, -0.02]); this.ci = 0; this.wob = 0; }
+  constructor(game) { super(game, 'jelly', makeJellyBlaster(), [4.8, -4.6, -10.6], 0.4, [0.06, 0.12, -0.02]); this.ci = 0; this.wob = 0; }
   update(dt, firing, cam, pl) {
     const g = this.game, D = this.def; this.tick(dt);
     this.firing = false;
@@ -302,7 +282,7 @@ class JellyBlaster extends VWeapon {
       else {
         this.firing = true;
         while (this.cool <= 0 && this.ammo > 0) {
-          this.cool += 1 / D.rate; this.ammo--; this.kick = Math.min(1, this.kick + 0.4); this.wob = 1; g.noiseT = 0.8; g.sfx.play('jellyShot'); g.input.rumble(0.2, 0.15, 50);
+          this.cool += 1 / D.rate; this.ammo--; this.kick = Math.min(1, this.kick + 0.4); this.wob = 1; g.noiseT = 0.8; g.sfx.play('jellyShot'); g.flashLight(g.player.eye(), [0.5, 1, 0.6], 300, 0.07);  g.input.rumble(0.2, 0.15, 50);
           const d = this.dir(cam, 0.01), from = this.muzzleWorld(cam), col = JELLY_COLS[this.ci++ % JELLY_COLS.length];
           g.arsenal.spawnJelly(from, [d.x * D.speed, d.y * D.speed, d.z * D.speed], col);
         }
@@ -318,13 +298,13 @@ class JellyBlaster extends VWeapon {
   }
 }
 class FondueGun extends VWeapon {
-  constructor(game) { super(game, 'fondue', makeFondueGun(), [5.2, -5.8, -12], 0.38, [0.05, 0.08, -0.03]); this.chargeT = -1; }
+  constructor(game) { super(game, 'fondue', makeFondueGun(), [5.4, -4.9, -12.6], 0.38, [0.06, 0.14, -0.03]); this.chargeT = -1; }
   update(dt, firing, cam, pl) {
     const g = this.game, D = this.def; this.tick(dt);
     if (this.chargeT >= 0) { // winding up: the pot rumbles, then fires
       this.chargeT += dt;
       if (this.chargeT >= D.charge) {
-        this.chargeT = -1; this.kick = 1; g.sfx.play('fondueFire'); g.noiseT = 2; g.input.rumble(0.9, 1, 320); pl.landKick = Math.min(10, (pl.landKick || 0) + 4);
+        this.chargeT = -1; this.kick = 1; g.sfx.play('fondueFire'); g.flashLight(g.player.eye(), [1, 0.8, 0.3], 650, 0.2);  g.noiseT = 2; g.input.rumble(0.9, 1, 320); pl.landKick = Math.min(10, (pl.landKick || 0) + 4);
         const d = this.dir(cam), from = this.muzzleWorld(cam);
         g.arsenal.spawnFondue(from, [d.x * D.speed, d.y * D.speed, d.z * D.speed]);
         for (let k = 0; k < 18; k++) g.particles.spawn(from, [d.x * 200 + (Math.random() - 0.5) * 160, d.y * 200 + Math.random() * 100, d.z * 200 + (Math.random() - 0.5) * 160], [1, 0.82, 0.25], 0.6, 300, 2);

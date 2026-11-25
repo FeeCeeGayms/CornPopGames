@@ -9,8 +9,9 @@ export default makeLevel({
   styles: [{ color: [1, 0.78, 0.5], pattern: 'flicker2' }, { color: [0.4, 1, 0.5], pattern: 'pulse' }, { color: [1, 0.55, 0.2], pattern: 'candle' }, { color: [1, 0.2, 0.1], pattern: 'neon' }],
   // Crypt of Hornt (v0.28): the map is re-skinned as an ancient ruin, lit by fire, under a hellish sky
   lightTint: [1, 0.84, 0.7], outTint: [1, 0.5, 0.4], retex: {'door': 'cryptdoor', 'door_red': 'cryptdoor_red', 'door_blue': 'cryptdoor_blue', 'door_gold': 'cryptdoor_gold', 'techtan': 'ruinwall', 'techgray': 'ruindark', 'techgreen': 'ruinwall2', 'techfloor': 'flagstone', 'ceil': 'vaultceil', 'light': 'runelight', 'lightamber': 'runelight', 'computer': 'runewall', 'support': 'ironrust', 'steeldark': 'vaultceil', 'rustpanel': 'bloodwall', 'metal': 'ironrust', 'concrete': 'flagdark', 'concretedark': 'flagdark', 'diamond': 'flagstone', 'tilebrown': 'flagblood', 'tile': 'flagdark', 'stepside': 'ruindark', 'trim': 'ruintrim', 'grate': 'ironrust', 'crate': 'ruinwall2', 'bigbrown': 'ruindark', 'graystone': 'hellrock', 'mossstone': 'hellrock', 'slimewall': 'ruinwall2', 'brickred': 'ruindark', 'dirt': 'bloodsoil', 'grass': 'deadgrass', 'checker': 'flagdark', 'lift': 'ironrust', 'hazard': 'ironrust', 'monitors': 'runelight', 'drawer': 'ruinwall2', 'jaildark': 'ruindark', 'cabinet': 'ruindark', 'books': 'bonewall', 'carpet': 'flagblood', 'chrome': 'ironrust'},
-  sky: {'hell': 1, 'a': [0.05, 0.0, 0.0], 'b': [0.9, 0.1, 0.03], 'glow': [0.7, 0.2, 0.04], 'orb': {'kind': 'sun', 'az': -1.2, 'el': 0.9, 'color': [1, 0.32, 0.06]}, 'silh': 'volcano'},
-  rain: { blood: true, density: 1100, wind: [-40, 22] }, storm: { every: [7, 15], power: 1, color: [1, 0.22, 0.12] },
+  sky: {'meteors': 1, 'hell': 1, 'a': [0.05, 0.0, 0.0], 'b': [0.9, 0.1, 0.03], 'glow': [0.7, 0.2, 0.04], 'orb': {'kind': 'sun', 'az': -1.2, 'el': 0.9, 'color': [1, 0.32, 0.06]}, 'silh': 'volcano'},
+  haze: 1, // (v0.33) heat shimmer, embers in the blood rain, burning rocks from the volcano
+  rain: [{ blood: true, density: 1100, wind: [-40, 22] }, { kind: 'embers', density: 220, wind: [-40, 22] }], storm: { every: [7, 15], power: 1, color: [1, 0.22, 0.12] },
 }, 112, 84, 'graystone', K => {
   const { X, Z, C } = K; const T = s => K.type(s);
   const GATE = { f: 0, c: 160, floor: 'techfloor', ceil: 'ceil', side: 'stepside', upper: 'techtan' };

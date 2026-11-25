@@ -4,12 +4,13 @@ import * as THREE from 'three';
 import { Player, HULL_MIN, HULL_MAX } from './player.js';
 import { MonsterMove } from './monster_move.js';
 // lit (PBR) materials for weapons and pickups; they get the game's environment map so they are lit like the old flat materials and metal has something to reflect
-export const LIT = { env: null, mats: [] };
+import * as GUNS from './guns.js';
+export const LIT = GUNS.LIT;
 function Std(o) { const m = new THREE.MeshStandardMaterial(o); LIT.mats.push(m); if (LIT.env) m.envMap = LIT.env; return m; }
 // view-model depth: squeeze the weapon into the front 0.5% of the depth range instead of clearing the depth buffer,
 // so the world depth survives for the wet-street reflections and the weapon still never clips into walls
 function squashDepth(cam) { const e = cam.projectionMatrix.elements; for (const j of [0, 1, 2, 3]) e[j * 4 + 2] = 0.005 * e[j * 4 + 2] - 0.995 * e[j * 4 + 3]; cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert(); }
-function vmKey(scene) { const d = new THREE.DirectionalLight(0xfff4e0, 0.9); d.position.set(-0.4, 1, 0.6); scene.add(d); }
+function vmKey(scene) { const d = new THREE.DirectionalLight(0xfff4e0, 0.8); d.position.set(-0.4, 1, 0.6); scene.add(d); const r = new THREE.DirectionalLight(0x9ab8ff, 0.3); r.position.set(0.8, 0.3, -0.7); scene.add(r); scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a2c22, 0.2)); } // key, a cool rim from the far side, soft fill
 
 export const QOQ_ANIMS = { idle: 'Idle_9', walk: 'Walking', run: 'Running', attack: 'Attack', death: 'Angry_To_Tantrum_Sit', pain: 'Angry_Ground_Stomp', taunt: 'Happy_jump_f' };
 export const QOQ = { health: 50, speed: 210, sight: 1500, attackRange: 950, chickenDamage: 4, chickenSpeed: 520, chickenGravity: 260, height: 60,
@@ -106,9 +107,9 @@ export function makeTissue() {
 export function makeSausage(len = 12, r = 2.6) {
   const g = new THREE.Group();
   const skin = new THREE.MeshBasicMaterial({ color: 0xb5562e }), tip = new THREE.MeshBasicMaterial({ color: 0x8a3a1c }), shine = new THREE.MeshBasicMaterial({ color: 0xe0906a });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 10), skin); body.rotation.x = Math.PI / 2; g.add(body);
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 6), skin); e.position.z = s * len / 2; g.add(e); const t = new THREE.Mesh(new THREE.SphereGeometry(r * 0.35, 6, 4), tip); t.position.z = s * (len / 2 + r * 0.9); g.add(t); }
-  const hl = new THREE.Mesh(new THREE.BoxGeometry(r * 0.5, 0.4, len * 0.8), shine); hl.position.set(r * 0.35, r * 0.8, 0); g.add(hl);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 16), skin); body.rotation.x = Math.PI / 2; g.add(body);                        // a plump casing with twisted, tied-off ends
+  for (const sg of [-1, 1]) { const t = new THREE.Mesh(new THREE.ConeGeometry(r * 0.42, r * 0.9, 8), tip); t.rotation.x = sg * Math.PI / 2; t.position.z = sg * (len / 2 + r * 1.25); g.add(t); const n = new THREE.Mesh(new THREE.TorusGeometry(r * 0.3, r * 0.1, 5, 10), tip); n.position.z = sg * (len / 2 + r * 0.95); g.add(n); }
+  const hl = new THREE.Mesh(new THREE.CapsuleGeometry(r * 0.16, len * 0.7, 3, 6), shine); hl.rotation.x = Math.PI / 2; hl.position.set(r * 0.42, r * 0.84, 0); g.add(hl);
   g.userData.mats = [skin, tip, shine]; return g;
 }
 // ---------------------------------------------------------------- candy corn (projectile / ammo)
@@ -120,36 +121,6 @@ export function makeCandyCorn(s = 1) {
   g.userData.mats = [yel, org, wht]; return g;
 }
 // ---------------------------------------------------------------- CC-9000 candy corn machine gun view model (after the blueprint)
-export function makeCandyGun() {
-  const g = new THREE.Group();
-  const M = c => Std({ color: c, roughness: 0.45, metalness: 0.05 });
-  const yellow = M(0xf5c518), yellowD = M(0xc89a10), orange = M(0xf07a1a), white = M(0xe8e8e0);
-  const grey = Std({ color: 0x7a7e86, roughness: 0.2, metalness: 0.7 });
-  const glass = Std({ color: 0xcfe6f0, transparent: true, opacity: 0.25, roughness: 0.1, metalness: 0.2, depthWrite: false });
-  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-  const cylZ = (r, l, mat, x, y, z, parent = g, segs = 12) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, segs), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); parent.add(m); return m; };
-  box(7, 6.5, 16, yellow, 0, 0, 2);                     // receiver
-  box(7.4, 1.2, 16.4, yellowD, 0, -3.4, 2);
-  box(5, 6, 9, orange, 0, -1, 14); box(5.6, 7.5, 3, orange, 0, -1.5, 18.5);   // stock + butt pad
-  const grip = box(3.4, 7, 3.6, orange, 0, -6.5, 6); grip.rotation.x = -0.3;
-  box(4, 2, 6, orange, 0, -4.4, -8);                    // fore grip rail
-  const handle = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.9, 6, 12, Math.PI), yellow); handle.rotation.y = Math.PI / 2; handle.position.set(0, 3.3, 1); g.add(handle);
-  // hopper full of candy corn
-  const hop = new THREE.Mesh(new THREE.SphereGeometry(4.6, 12, 8), glass); hop.position.set(0, 7.6, 8); hop.scale.set(1, 0.85, 1.1); g.add(hop);
-  const kernels = []; for (let i = 0; i < 9; i++) { const c = makeCandyCorn(0.55); c.position.set((Math.random() - 0.5) * 5, 5.4 + Math.random() * 3.2, 8 + (Math.random() - 0.5) * 5); c.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3); g.add(c); kernels.push(c); }
-  // drum
-  const drum = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 3.4, 16), orange); drum.rotation.z = Math.PI / 2; drum.position.set(4.6, -3.5, 1); g.add(drum);
-  const drumFace = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 3.6, 16), white); drumFace.rotation.z = Math.PI / 2; drumFace.position.copy(drum.position); g.add(drumFace);
-  // rotating gatling barrels
-  const spin = new THREE.Group(); spin.position.set(0, 0.6, -6); g.add(spin);
-  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; cylZ(0.95, 20, white, Math.cos(a) * 2.2, Math.sin(a) * 2.2, -10, spin, 8); }
-  for (const z of [-2, -12, -19]) cylZ(3.6, 1.6, orange, 0, 0, z, spin, 12);
-  cylZ(1, 21, grey, 0, 0, -10, spin, 8);
-  const muzzle = new THREE.Group(); muzzle.position.set(0, 0.6, -27); g.add(muzzle);
-  for (let k = 0; k < 4; k++) cylZ(3.2 - (k % 2) * 0.5, 1, orange, 0, 0, -k * 1.1, muzzle, 12);
-  g.userData = { spin, kernels, mats: [yellow, yellowD, orange, white, grey], base: [0xf5c518, 0xc89a10, 0xf07a1a, 0xe8e8e0, 0x7a7e86], muzzle: new THREE.Vector3(0, 0.6, -31) };
-  return g;
-}
 
 // ---------------------------------------------------------------- a turd (projectile / ammo): a stacked brown swirl
 export function makeTurd(s = 1) {
@@ -161,76 +132,16 @@ export function makeTurd(s = 1) {
   g.userData.mats = [br, hi, dk]; return g;
 }
 // ---------------------------------------------------------------- the turd launcher view model: a toilet-green tube with a seat-ring muzzle
-export function makeTurdLauncher() {
-  const g = new THREE.Group();
-  const M = c => Std({ color: c, roughness: 0.5, metalness: 0.05 });
-  const tube = M(0x3f6a3a), tubeD = M(0x284a26), seat = Std({ color: 0xeeeeea, roughness: 0.3, metalness: 0.1 });
-  const metal = Std({ color: 0x6e7278, roughness: 0.12, metalness: 0.85 });
-  const grip = Std({ color: 0x5a3a22, roughness: 0.6, metalness: 0.0 });
-  const warn = M(0xffc020);
-  const cyl = (r, l, mat, x, y, z, segs = 16) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, segs), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
-  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-  cyl(4.6, 34, tube, 0, 0, -8); cyl(4.9, 2, tubeD, 0, 0, -2); cyl(4.9, 2, tubeD, 0, 0, 7); cyl(5.4, 3, tubeD, 0, 0, 9.5);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(5.6, 1.6, 8, 20), seat); ring.position.set(0, 0, -25.4); g.add(ring);       // toilet-seat muzzle
-  const lid = new THREE.Mesh(new THREE.CylinderGeometry(6.2, 6.2, 0.9, 20, 1, false, 0, Math.PI), seat); lid.rotation.set(Math.PI / 2 - 0.9, 0, 0); lid.position.set(0, 5.5, -27); g.add(lid);
-  const loaded = makeTurd(0.62); loaded.rotation.x = -Math.PI / 2; loaded.position.set(0, 0, -23); g.add(loaded);
-  box(2, 3, 9, metal, 0, 5.6, -6); box(1.2, 2, 1.2, warn, 0, 7.6, -1.5); box(1.2, 2, 1.2, warn, 0, 7.6, -10);                  // sight rail
-  const gr = box(3.2, 7, 3.4, grip, 0, -6.5, 1); gr.rotation.x = -0.25; box(3, 6, 3, grip, 0, -6, -12);                     // grips
-  box(0.9, 2.6, 1.4, metal, 0, -3.8, -1.6);                                                                                   // trigger
-  for (let k = 0; k < 3; k++) box(0.6, 0.6, 3.6, warn, 3.6 * Math.cos(k * 2.1), 3.6 * Math.sin(k * 2.1), -16);
-  g.userData = { loaded, mats: [tube, tubeD, seat, metal, grip, warn], base: [0x3f6a3a, 0x284a26, 0xeeeeea, 0x6e7278, 0x5a3a22, 0xffc020], muzzle: new THREE.Vector3(0, 0, -28) };
-  return g;
-}
 
 // ---------------------------------------------------------------- double-barrel sausage shotgun view model
-export function makeShotgun() {
-  const g = new THREE.Group();
-  const M = c => Std({ color: c, roughness: 0.4, metalness: 0.1 });
-  const metal = Std({ color: 0x50545a, roughness: 0.15, metalness: 0.9 });
-  const dark = Std({ color: 0x26282c, roughness: 0.2, metalness: 0.7 });
-  const wood = Std({ color: 0x7a4a24, roughness: 0.6, metalness: 0.0 });
-  const woodD = Std({ color: 0x4e2e16, roughness: 0.65, metalness: 0.0 });
-  const brass = Std({ color: 0xd0a040, roughness: 0.1, metalness: 0.85 });
-  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-  const cyl = (r, l, mat, x, y, z, segs = 12) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, segs), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
-  const barrels = new THREE.Group(); g.add(barrels);
-  for (const x of [-2.1, 2.1]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 24, 12), metal); b.rotation.x = Math.PI / 2; b.position.set(x, 1.5, -11); barrels.add(b);
-    const mz = new THREE.Mesh(new THREE.CylinderGeometry(1.45, 1.45, 0.6, 10), dark); mz.rotation.x = Math.PI / 2; mz.position.set(x, 1.5, -23.2); barrels.add(mz); }
-  const rib = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 22), dark); rib.position.set(0, 3.8, -11); barrels.add(rib);
-  const loaded = []; for (const x of [-2.1, 2.1]) { const s = makeSausage(4, 1.35); s.position.set(x, 1.5, -22.6); barrels.add(s); loaded.push(s); }
-  box(6.4, 3.4, 9, wood, 0, -1.4, -9);            // fore-end
-  box(6.6, 5.4, 8, metal, 0, 0.6, 1);             // receiver
-  box(1.4, 1.4, 3, brass, 0, 3.6, 2.5);           // hammer
-  const stock = box(5.2, 6.5, 16, wood, 0, -3.8, 12); stock.rotation.x = 0.28;
-  box(5.4, 2, 3, woodD, 0, -7.4, 19);
-  box(1, 3, 1.6, dark, 0, -2.6, 3);               // trigger
-  g.userData = { barrels, loaded, mats: [metal, dark, wood, woodD, brass], base: [0x50545a, 0x26282c, 0x7a4a24, 0x4e2e16, 0xd0a040], muzzle: [new THREE.Vector3(-2.1, 1.5, -24), new THREE.Vector3(2.1, 1.5, -24)] };
-  return g;
-}
 
 // ---------------------------------------------------------------- super soaker view model
-export function makeSoaker() {
-  const g = new THREE.Group();
-  const M = c => Std({ color: c, roughness: 0.4, metalness: 0.02 });
-  const green = M(0x5ad020), dgreen = M(0x2a7a18), orange = M(0xff7a10), yellow = M(0xffd020);
-  const clear = Std({ color: 0xffe9a0, transparent: true, opacity: 0.4, roughness: 0.05, metalness: 0.1, depthWrite: false });
-  const liquid = Std({ color: 0xffe020, roughness: 0.1, metalness: 0.0, transparent: true, opacity: 0.8 });
-  const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); return m; };
-  const cyl = (r, l, mat, x, y, z, segs = 12) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, l, segs), mat); m.rotation.x = Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
-  box(4.2, 4.4, 24, green, 0, 0, -6);              // barrel body
-  box(3.2, 2, 20, dgreen, 0, 2.6, -7);             // top rail
-  cyl(1.6, 6, orange, 0, 0.4, -20.5);               // nozzle
-  cyl(0.9, 1.2, yellow, 0, 0.4, -24);               // tip
-  const pump = cyl(2.2, 8, yellow, 0, -3.6, -12);   // pump handle
-  box(3.4, 8, 3.6, dgreen, 0, -5.5, 4); g.children[g.children.length - 1].rotation.x = -0.35; // grip
-  box(1, 3, 1.6, orange, 0, -3.2, 0.5);           // trigger
-  const tankShell = cyl(4.2, 13, clear, 0, 6.6, -2, 14); // tank
-  const tank = cyl(3.7, 12, liquid, 0, 6.6, -2, 14);
-  cyl(4.6, 1.2, orange, 0, 6.6, 4.8); cyl(4.6, 1.2, orange, 0, 6.6, -8.8);
-  box(1.2, 4, 1.2, dgreen, 0, 3.6, 2);
-  g.userData = { pump, tank, tankShell, mats: [green, dgreen, orange, yellow, liquid], nozzle: new THREE.Vector3(0, 0.4, -25) };
-  return g;
-}
+
+// the weapon view models are built in guns.js (v0.33: turned and extruded shapes with PBR materials)
+export function makeSoaker() { return GUNS.makeSoaker(); }
+export function makeShotgun() { return GUNS.makeShotgun(makeSausage); }
+export function makeCandyGun() { return GUNS.makeCandyGun(makeCandyCorn); }
+export function makeTurdLauncher() { return GUNS.makeTurdLauncher(makeTurd); }
 
 // juice jug (ammo) / soaker pickup / pizza box (health) world models
 export function makePickupModel(kind, T) {
@@ -700,7 +611,7 @@ export class Soaker {
     this.game = game; this.model = makeSoaker();
     this.scene = new THREE.Scene(); vmKey(this.scene); this.cam = new THREE.PerspectiveCamera(60, 1, 0.5, 200);
     this.holder = new THREE.Group(); this.holder.add(this.model); this.scene.add(this.holder);
-    this.model.scale.setScalar(0.38); this.model.position.set(8, -7, -15.5); this.model.rotation.set(0.06, 0.32, -0.04);
+    this.model.scale.setScalar(0.36); this.model.position.set(7.2, -5.7, -14.5); this.model.rotation.set(0.08, 0.36, -0.04);
     this.cool = 0; this.kick = 0; this.raise = 1; this.pumpT = 0; this.firing = false; this.emptyT = 0;
   }
   nozzleWorld(camera) {
@@ -736,9 +647,9 @@ export class Soaker {
     const u = this.model.userData; u.pump.position.z = -12 + Math.sin(this.pumpT) * 2.2 * (this.firing ? 1 : 0);
     const fill = Math.max(0.02, g.ammo / SOAKER.maxAmmo); u.tank.scale.set(1, fill, 1); u.tank.position.z = -2 + 6 * (1 - fill);
     const L = g.pointLight(player.eye());
-    const k = [Math.min(1.6, 0.35 + L[0] * 0.8), Math.min(1.6, 0.35 + L[1] * 0.8), Math.min(1.6, 0.35 + L[2] * 0.8)];
+    const k = [Math.min(1.15, 0.3 + L[0] * 0.75), Math.min(1.15, 0.3 + L[1] * 0.75), Math.min(1.15, 0.3 + L[2] * 0.75)];
     const base = [0x5ad020, 0x2a7a18, 0xff7a10, 0xffd020];
-    u.mats.slice(0, 4).forEach((m, i) => { const c = new THREE.Color(base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); });
+    u.mats.slice(0, 4).forEach((m, i) => { const c = new THREE.Color(base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); m.envMapIntensity = 0.15 + 0.6 * (k[0] + k[1] + k[2]) / 3; });
   }
   render(renderer, camera) {
     this.cam.fov = camera.fov; this.cam.aspect = camera.aspect; this.cam.updateProjectionMatrix(); squashDepth(this.cam);
@@ -752,7 +663,7 @@ export class TurdLauncher {
     this.game = game; this.model = makeTurdLauncher();
     this.scene = new THREE.Scene(); vmKey(this.scene); this.cam = new THREE.PerspectiveCamera(60, 1, 0.5, 200);
     this.holder = new THREE.Group(); this.holder.add(this.model); this.scene.add(this.holder);
-    this.model.scale.setScalar(0.38); this.model.position.set(5.6, -5.2, -10); this.model.rotation.set(0.04, 0.07, -0.03);
+    this.model.scale.setScalar(0.36); this.model.position.set(5.8, -4.3, -11); this.model.rotation.set(0.06, 0.17, -0.03);
     this.cool = 0; this.kick = 0; this.raise = 1; this.emptyT = 0;
   }
   muzzleWorld(camera) { const v = this.model.userData.muzzle.clone(); this.model.updateMatrixWorld(true); v.applyMatrix4(this.model.matrixWorld); v.applyQuaternion(camera.quaternion); return [camera.position.x + v.x, camera.position.y + v.y, camera.position.z + v.z]; }
@@ -761,7 +672,7 @@ export class TurdLauncher {
     if (firing && this.raise < 0.3 && this.cool <= 0) {
       if (g.turds <= 0) { if (this.emptyT <= 0) { g.sfx.play('empty'); g.hud.centerPrint('Out of turds! Find a box.', 1.2); this.emptyT = 1.2; g.autoSwitch(); } }
       else {
-        g.turds--; this.cool = TURD.cooldown; this.kick = 1; g.sfx.play('turdLaunch'); g.noiseT = 1.2; g.input.rumble(0.6, 0.7, 180);
+        g.turds--; this.cool = TURD.cooldown; this.kick = 1; g.sfx.play('turdLaunch'); g.flashLight(g.player.eye(), [1, 0.7, 0.35], 420, 0.12);  g.noiseT = 1.2; g.input.rumble(0.6, 0.7, 180);
         const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); dir.y += 0.02; dir.normalize();
         const from = this.muzzleWorld(camera);
         g.spawnTurd(from, [dir.x * TURD.speed, dir.y * TURD.speed, dir.z * TURD.speed]);
@@ -774,8 +685,8 @@ export class TurdLauncher {
     this.holder.position.set(Math.sin(t * 5.2) * 0.5 * sp, bob * 0.1 - this.raise * 10 + Math.abs(Math.cos(t * 5.2)) * 0.3 * sp, this.kick * 3.5);
     this.holder.rotation.set(this.kick * 0.22, 0, (player.roll || 0) * 2);
     const L = g.pointLight(player.eye());
-    const k = [Math.min(1.6, 0.35 + L[0] * 0.8), Math.min(1.6, 0.35 + L[1] * 0.8), Math.min(1.6, 0.35 + L[2] * 0.8)];
-    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); });
+    const k = [Math.min(1.15, 0.3 + L[0] * 0.75), Math.min(1.15, 0.3 + L[1] * 0.75), Math.min(1.15, 0.3 + L[2] * 0.75)];
+    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); m.envMapIntensity = 0.15 + 0.6 * (k[0] + k[1] + k[2]) / 3; });
   }
   render(renderer, camera) {
     this.cam.fov = camera.fov; this.cam.aspect = camera.aspect; this.cam.updateProjectionMatrix(); squashDepth(this.cam);
@@ -789,7 +700,7 @@ export class CandyGun {
     this.game = game; this.model = makeCandyGun();
     this.scene = new THREE.Scene(); vmKey(this.scene); this.cam = new THREE.PerspectiveCamera(60, 1, 0.5, 200);
     this.holder = new THREE.Group(); this.holder.add(this.model); this.scene.add(this.holder);
-    this.model.scale.setScalar(0.4); this.model.position.set(4.4, -5.0, -10.5); this.model.rotation.set(0.05, 0.06, -0.02);
+    this.model.scale.setScalar(0.37); this.model.position.set(4.9, -4.3, -11.8); this.model.rotation.set(0.06, 0.15, -0.02);
     this.cool = 0; this.kick = 0; this.raise = 1; this.emptyT = 0; this.spinV = 0; this.angle = 0; this.firing = false;
   }
   muzzleWorld(camera) { const v = this.model.userData.muzzle.clone(); this.model.updateMatrixWorld(true); v.applyMatrix4(this.model.matrixWorld); v.applyQuaternion(camera.quaternion); return [camera.position.x + v.x, camera.position.y + v.y, camera.position.z + v.z]; }
@@ -802,7 +713,7 @@ export class CandyGun {
     if (want && this.spinV > 0.75) {
       this.firing = true;
       while (this.cool <= 0 && g.candy > 0) {
-        this.cool += 1 / CANDYGUN.rate; g.candy--; this.kick = Math.min(1, this.kick + 0.3); g.noiseT = 0.8; g.sfx.play('candyShot'); g.input.rumble(0.25, 0.1, 50);
+        this.cool += 1 / CANDYGUN.rate; g.candy--; this.kick = Math.min(1, this.kick + 0.3); g.noiseT = 0.8; g.sfx.play('candyShot'); g.flashLight(g.player.eye(), [1, 0.75, 0.3], 330, 0.06);  g.input.rumble(0.25, 0.1, 50);
         const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         dir.x += (Math.random() - 0.5) * CANDYGUN.spread; dir.y += (Math.random() - 0.5) * CANDYGUN.spread * 0.7 + 0.008; dir.z += (Math.random() - 0.5) * CANDYGUN.spread; dir.normalize();
         const from = this.muzzleWorld(camera);
@@ -822,8 +733,8 @@ export class CandyGun {
     this.holder.position.set(Math.sin(t * 5.2) * 0.5 * sp + shake, bob * 0.1 - this.raise * 10 + Math.abs(Math.cos(t * 5.2)) * 0.3 * sp + shake, this.kick * 0.8);
     this.holder.rotation.set(this.kick * 0.04, 0, (player.roll || 0) * 2);
     const L = g.pointLight(player.eye());
-    const k = [Math.min(1.6, 0.35 + L[0] * 0.8), Math.min(1.6, 0.35 + L[1] * 0.8), Math.min(1.6, 0.35 + L[2] * 0.8)];
-    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); });
+    const k = [Math.min(1.15, 0.3 + L[0] * 0.75), Math.min(1.15, 0.3 + L[1] * 0.75), Math.min(1.15, 0.3 + L[2] * 0.75)];
+    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); m.envMapIntensity = 0.15 + 0.6 * (k[0] + k[1] + k[2]) / 3; });
   }
   render(renderer, camera) {
     this.cam.fov = camera.fov; this.cam.aspect = camera.aspect; this.cam.updateProjectionMatrix(); squashDepth(this.cam);
@@ -837,7 +748,7 @@ export class Shotgun {
     this.game = game; this.model = makeShotgun();
     this.scene = new THREE.Scene(); vmKey(this.scene); this.cam = new THREE.PerspectiveCamera(60, 1, 0.5, 200);
     this.holder = new THREE.Group(); this.holder.add(this.model); this.scene.add(this.holder);
-    this.model.scale.setScalar(0.42); this.model.position.set(3.6, -5.4, -9.5); this.model.rotation.set(0.07, 0.05, -0.02);
+    this.model.scale.setScalar(0.42); this.model.position.set(4.0, -4.4, -10.2); this.model.rotation.set(0.09, 0.13, -0.03);
     this.cool = 0; this.kick = 0; this.raise = 1; this.emptyT = 0;
   }
   muzzleWorld(camera, i) {
@@ -849,7 +760,7 @@ export class Shotgun {
     if (firing && this.raise < 0.3 && this.cool <= 0) {
       if (g.sausages < SHOTGUN.perShot) { if (this.emptyT <= 0) { g.sfx.play('empty'); g.hud.centerPrint('Out of sausages!', 1.2); this.emptyT = 1.2; g.autoSwitch(); } }
       else {
-        g.sausages -= SHOTGUN.perShot; this.cool = SHOTGUN.cooldown; this.kick = 1; g.sfx.play('shotgun'); g.noiseT = 1.2; g.input.rumble(0.5, 0.9, 160);
+        g.sausages -= SHOTGUN.perShot; this.cool = SHOTGUN.cooldown; this.kick = 1; g.sfx.play('shotgun'); g.flashLight(g.player.eye(), [1, 0.8, 0.5], 560, 0.11); g.noiseT = 1.2; g.input.rumble(0.5, 0.9, 160);
         const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         for (let i = 0; i < 2; i++) {
@@ -872,8 +783,8 @@ export class Shotgun {
     this.holder.position.set(Math.sin(t * 5.2) * 0.5 * sp, bob * 0.1 - this.raise * 10 + Math.abs(Math.cos(t * 5.2)) * 0.3 * sp - br * 1.5, this.kick * 3);
     this.holder.rotation.set(this.kick * 0.35, 0, (player.roll || 0) * 2);
     const L = g.pointLight(player.eye());
-    const k = [Math.min(1.6, 0.35 + L[0] * 0.8), Math.min(1.6, 0.35 + L[1] * 0.8), Math.min(1.6, 0.35 + L[2] * 0.8)];
-    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); });
+    const k = [Math.min(1.15, 0.3 + L[0] * 0.75), Math.min(1.15, 0.3 + L[1] * 0.75), Math.min(1.15, 0.3 + L[2] * 0.75)];
+    u.mats.forEach((m, i) => { const c = new THREE.Color(u.base[i]); m.color.setRGB(c.r * k[0], c.g * k[1], c.b * k[2]); m.envMapIntensity = 0.15 + 0.6 * (k[0] + k[1] + k[2]) / 3; });
   }
   render(renderer, camera) {
     this.cam.fov = camera.fov; this.cam.aspect = camera.aspect; this.cam.updateProjectionMatrix(); squashDepth(this.cam);

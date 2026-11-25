@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { loadTextures } from './textures.js';
 import { addRuinTextures } from './ruintex.js';
 import { addBunkerTextures } from './bunkertex.js';
+import { addUpgradeTextures } from './hdtex.js';
 import { World, CELL } from './world.js';
 import { PropBuilder } from './props.js';
 import { Player, HULL_MIN, HULL_MAX, PM } from './player.js';
@@ -15,6 +16,9 @@ import { BCM_ANIMS, BossDirector } from './boss.js';
 import { TROP_ANIMS, TropDirector } from './trop.js';
 import { Qoq, QOQ, QOQ_ANIMS, MARV, MARV_ANIMS, BALLINKI, BALLINKI_ANIMS, FRENTA, FRENTA_ANIMS, BEANS, BEANS_ANIMS, BOOJO, BOOJO_ANIMS, INFIGHT, makeTaco, makePotato, TURD, SOAKER, SHOTGUN, CANDYGUN, Soaker, Shotgun, CandyGun, TurdLauncher, makeTurd, Particles, makeChicken, makeTissue, makeSausage, makeCandyCorn, makePickupModel, segAabb, LIT } from './combat.js';
 import { PizzaCutter } from './cutter.js';
+import { Rat } from './rats.js';
+import { TitleScene } from './titlescene.js';
+import { hdSet, hdDispose, pbrKind, pbrUniforms, pickLights, PBR_PARS, PBR_MAIN } from './pbr.js';
 
 THREE.ColorManagement.enabled = false;
 
@@ -35,6 +39,7 @@ uniform sampler2D map; uniform sampler2D lm; uniform sampler2D sm; uniform vec3 
 uniform vec3 fogColor; uniform float fogDensity; uniform float fullbright; uniform float nolm; uniform float time; uniform vec2 scroll; uniform float warp; uniform float alpha;
 uniform float lightning; uniform float wetOn; uniform float shine; uniform vec3 lightCol; uniform vec3 wetTint; uniform vec4 mist; uniform vec2 mistY;
 varying vec2 vUv; varying vec2 vLm; varying float vDepth; varying vec3 vWorld; varying float vWet;
+${PBR_PARS}
 float hash2(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
   return mix(mix(hash2(i), hash2(i+vec2(1.0,0.0)), f.x), mix(hash2(i+vec2(0.0,1.0)), hash2(i+vec2(1.0,1.0)), f.x), f.y); }
@@ -51,8 +56,9 @@ void main(){
       float pn = vnoise(vWorld.xz * 0.006) * 0.65 + vnoise(vWorld.xz * 0.021) * 0.35;
       wet = L.a * mix(0.5, 1.0, smoothstep(0.45, 0.62, pn)); } }
   if (shine > 0.0 && vWet > 0.5) wet = max(wet, shine * (0.55 + 0.45 * vnoise(vWorld.xz * 0.011)));   // polished floor plates (the Pidser Cave bunker) mirror the room
+  ${PBR_MAIN}
   float glow = max(1.0 - t.a, fullbright);
-  vec3 c = t.rgb * mix(light, vec3(1.0), glow);
+  vec3 c = t.rgb * mix(light, vec3(1.0), glow) + specAdd * (1.0 - glow);
   c *= mix(vec3(1.0), wetTint, wet) * (1.0 - 0.38 * wet);                 // wet surfaces are darker (the reflection is added in the blit pass); blood rain stains them red
   float f = 1.0 - exp(-fogDensity*fogDensity*vDepth*vDepth);
   c = mix(c, fogColor, clamp(f,0.0,1.0));
@@ -60,11 +66,11 @@ void main(){
     float mh = mistY.y > 0.0 ? clamp((mistY.x - vWorld.y) / mistY.y, 0.0, 1.0) : 1.0;
     float mn = 0.6 + 0.4 * vnoise(vWorld.xz * 0.004 + vec2(time * 0.05, time * 0.03));
     c = mix(c, mist.rgb, clamp((1.0 - exp(-vDepth * mist.a)) * mh * open * mn, 0.0, 0.92)); }
-  gl_FragColor = vec4(c, alpha * (1.0 - 0.5 * wet * (1.0 - clamp(f, 0.0, 1.0))));
+  gl_FragColor = vec4(c, alpha * (1.0 - 0.5 * max(wet, gloss) * (1.0 - clamp(f, 0.0, 1.0))));
 }`;
 const SKY_FRAG = `
 uniform sampler2D map; uniform float time; uniform vec3 camPos; uniform vec3 tint; uniform float city; uniform float storm; uniform float bolt; uniform float boltAz; uniform float boltSeed; uniform vec3 fogColor; varying vec3 vWorld;
-uniform float hell; uniform vec3 skyA; uniform vec3 skyB; uniform vec3 glowCol; uniform vec3 orbDir; uniform vec3 orbCol; uniform float orbKind; uniform float silh; uniform vec3 boltCol; uniform float vortex; uniform float moonK;
+uniform float meteors; uniform float hell; uniform vec3 skyA; uniform vec3 skyB; uniform vec3 glowCol; uniform vec3 orbDir; uniform vec3 orbCol; uniform float orbKind; uniform float silh; uniform vec3 boltCol; uniform float vortex; uniform float moonK;
 vec3 skyline(vec3 d, vec3 c, float cloud);
 float h1(float n){ return fract(sin(n) * 43758.5453); }
 float hn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f); float n = dot(i, vec2(1.0, 57.0));
@@ -106,6 +112,13 @@ vec3 hellSky(vec3 d, float lum, float a){
       c += orbCol * 0.28 * exp(-r * 5.0) * veil;
     }
   }
+  if (meteors > 0.0) for (int m = 0; m < 3; m++) {                             // burning rocks falling out of the sky
+    float fm = float(m); float Tm = time * (0.13 + 0.035 * fm) + fm * 3.7; float idm = floor(Tm), ph = fract(Tm) / (0.3 * min(meteors, 1.5));
+    if (ph < 1.0) { float az0 = h1(idm * 7.1 + fm) * 6.2832, el0 = 0.55 + 0.6 * h1(idm * 3.3 + fm * 2.0), az1 = az0 + 0.7 * (h1(idm * 1.9 + fm) - 0.5), el1 = el0 - 0.5;
+      vec3 pa0 = vec3(cos(az0) * cos(el0), sin(el0), sin(az0) * cos(el0)), pb0 = vec3(cos(az1) * cos(el1), sin(el1), sin(az1) * cos(el1));
+      vec3 head = normalize(mix(pa0, pb0, ph)), tail = normalize(mix(pa0, pb0, max(ph - 0.3, 0.0)));
+      vec3 qa = d - tail, ba = head - tail; float hh = clamp(dot(qa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0); float dist = length(qa - ba * hh);
+      c += (vec3(1.0, 0.5, 0.12) * exp(-dist * 240.0) * hh * hh * 2.2 + vec3(1.0, 0.85, 0.5) * exp(-length(d - head) * 110.0) * 2.0) * (1.0 - a * 0.45) * smoothstep(1.0, 0.8, ph); } }
   c += glowCol * exp(-max(el, 0.0) * 4.2) * (0.75 + 0.25 * sin(time * 0.6 + az * 4.0));                // firelight under the clouds
   c += boltCol * storm * (0.25 + a * 1.3);
   if (silh > 1.5) {                                                            // a volcano: the glow of its plume behind the mountains
@@ -119,8 +132,10 @@ vec3 hellSky(vec3 d, float lum, float a){
       float w = 0.35 + 0.6 * h1(id * 5.3 + L); float x = abs(fu - 0.5) / (w * 0.5); float kind = h1(id * 9.1 + L * 2.0);
       hg = 0.12 + pow(h1(id * 1.7 + 3.1 + L * 9.0), 2.0) * (0.66 - L * 0.26);
       if (x > 1.0) hg = 0.07 + 0.05 * h1(id * 2.9) + 0.035 * hn(vec2(fu * 7.0 + id, L));
-      else if (kind < 0.35) hg = hg * (1.0 - 0.75 * x * sqrt(x)) + 0.04;                                 // a spire
-      else if (kind < 0.7) hg -= 0.08 * step(0.5, h1(floor(fu * 6.0) + id * 3.0)) + 0.06 * hn(vec2(fu * 9.0 + id, 3.0)); // a broken tower
+      else if (kind < 0.42) { float Hs = hg + 0.05; float dome = Hs * (0.8 + 0.2 * sqrt(max(1.0 - x * x / 0.5, 0.0)));     // a domed spire with a flared rim, an orb each side of its foot
+        float orb = Hs * 0.04 + Hs * 0.2 * sqrt(max(1.0 - pow((x - 0.7) / 0.3, 2.0), 0.0));
+        hg = x < 0.4 ? dome : ((x < 0.7 && el > Hs * 0.72 && el < Hs * 0.86) ? dome : orb); }
+      else if (kind < 0.72) hg -= 0.08 * step(0.5, h1(floor(fu * 6.0) + id * 3.0)) + 0.06 * hn(vec2(fu * 9.0 + id, 3.0)); // a broken tower
       else hg *= 1.0 - 0.32 * step(0.55, x);                                                             // a stepped keep
       if (x < 0.8) { vec2 wc = vec2(fu * 5.0, el * 34.0); vec2 wf = fract(wc); win = step(0.86, h1(dot(floor(wc) + id * 7.0, vec2(1.3, 7.1)) + L)) * step(0.3, wf.x) * step(wf.x, 0.6) * step(0.25, wf.y) * step(wf.y, 0.75); }
     } else {                                                                   // black volcanic mountains
@@ -207,7 +222,7 @@ void main(){
 }`;
 const BLIT_FRAG = `
 uniform sampler2D tex; uniform sampler2D gooTex; uniform float goo; uniform float gooSlide; uniform float gamma; uniform float bright; uniform vec4 flash; uniform float levels; uniform vec2 res; varying vec2 vUv;
-uniform sampler2D depthTex; uniform float ssr; uniform sampler2D bloomTex; uniform float bloomAmt; uniform mat4 proj; uniform mat4 invProj; uniform mat4 invView; uniform vec3 upV; uniform vec3 xV; uniform vec3 zV; uniform vec3 reflSky; uniform float time; uniform float rainAmt;
+uniform sampler2D depthTex; uniform float ssr; uniform sampler2D bloomTex; uniform float bloomAmt; uniform mat4 proj; uniform mat4 invProj; uniform mat4 invView; uniform vec3 upV; uniform vec3 xV; uniform vec3 zV; uniform vec3 reflSky; uniform float time; uniform float rainAmt; uniform float haze;
 vec3 viewAt(vec2 uv){ float z = texture2D(depthTex, uv).x * 2.0 - 1.0; vec4 p = invProj * vec4(uv * 2.0 - 1.0, z, 1.0); return p.xyz / p.w; }
 float hsh(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
 // rain ripples: expanding rings on a 24-unit grid, each cell restarting at its own time
@@ -221,7 +236,8 @@ vec2 ripples(vec2 w){
   return n * 0.22;
 }
 void main(){
-  vec4 src = texture2D(tex, vUv);
+  vec2 hz = haze > 0.0 ? vec2(sin(vUv.y * 70.0 + time * 2.6) + sin(vUv.y * 163.0 - time * 3.7) * 0.5, 0.0) * 0.0011 * haze * smoothstep(0.95, 0.25, vUv.y) : vec2(0.0);   // heat shimmer off the burning ground
+  vec4 src = texture2D(tex, vUv + hz);
   vec3 c = src.rgb * bright;
   float wet = ssr > 0.5 ? clamp((1.0 - src.a) * 2.0, 0.0, 1.0) : 0.0;
   if (wet > 0.03) { // wet street: screen-space reflection of everything above it, shimmering with rain ripples
@@ -298,7 +314,7 @@ void main(){
 export const GFX = {
   ultra: { scale: 2, aniso: 8, bloom: true, fxaa: true, shadow: 2048, label: 'Ultra' },
   high: { scale: 1.5, aniso: 4, bloom: true, fxaa: true, shadow: 1024, label: 'High' },
-  medium: { scale: 1, aniso: 2, bloom: false, fxaa: true, shadow: 512, label: 'Medium' },
+  medium: { scale: 1, aniso: 2, bloom: false, fxaa: true, shadow: 512, hd: 2, label: 'Medium' },
   retro: { scale: 0, aniso: 1, bloom: false, fxaa: false, shadow: 512, retro: true, label: 'Retro (pixelated)' },
 };
 const PORTAL_FRAG = `
@@ -326,7 +342,7 @@ export class Game {
     { // soft studio environment for the lit materials (weapons, pickups, props): bright top, dim floor, a couple of light panels for highlights
       const pm = new THREE.PMREMGenerator(this.renderer), es = new THREE.Scene();
       const geo = new THREE.SphereGeometry(10, 32, 16), pos = geo.attributes.position, col = [];
-      for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 10, k = y > 0 ? 0.8 + 0.45 * y : 0.8 + 0.5 * y; col.push(k, k * 0.97, k * 0.92); }
+      for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 10, k = (y > 0 ? 0.5 + 0.7 * y : 0.5 + 0.44 * y) * (1 - 0.55 * Math.exp(-y * y * 60)); col.push(k, k * 0.97, k * 0.92); }   // bright overhead, dim floor, a dark band on the horizon (what makes polished metal read as metal)
       geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
       es.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
       for (const [x, z] of [[-4, -3], [5, 2]]) { const pm2 = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); pm2.color.setRGB(3, 3, 2.8); const pan = new THREE.Mesh(new THREE.PlaneGeometry(5, 2.5), pm2); pan.position.set(x, 8, z); pan.rotation.x = Math.PI / 2; es.add(pan); }
@@ -335,7 +351,7 @@ export class Game {
     }
     this.camera = new THREE.PerspectiveCamera(70, 1, 2, 6000);
     this.blitScene = new THREE.Scene(); this.blitCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-    this.blitMat = new THREE.ShaderMaterial({ uniforms: { depthTex: { value: null }, ssr: { value: 0 }, proj: { value: new THREE.Matrix4() }, invProj: { value: new THREE.Matrix4() }, invView: { value: new THREE.Matrix4() }, upV: { value: new THREE.Vector3() }, xV: { value: new THREE.Vector3() }, zV: { value: new THREE.Vector3() }, reflSky: { value: new THREE.Color() }, time: { value: 0 }, rainAmt: { value: 1 }, tex: { value: null }, bloomTex: { value: null }, bloomAmt: { value: 0 }, gamma: { value: 1 }, bright: { value: 1 }, flash: { value: new THREE.Vector4(0, 0, 0, 0) }, levels: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, goo: { value: 0 }, gooSlide: { value: 0 }, gooTex: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }', fragmentShader: BLIT_FRAG, depthTest: false, depthWrite: false });
+    this.blitMat = new THREE.ShaderMaterial({ uniforms: { haze: { value: 0 }, depthTex: { value: null }, ssr: { value: 0 }, proj: { value: new THREE.Matrix4() }, invProj: { value: new THREE.Matrix4() }, invView: { value: new THREE.Matrix4() }, upV: { value: new THREE.Vector3() }, xV: { value: new THREE.Vector3() }, zV: { value: new THREE.Vector3() }, reflSky: { value: new THREE.Color() }, time: { value: 0 }, rainAmt: { value: 1 }, tex: { value: null }, bloomTex: { value: null }, bloomAmt: { value: 0 }, gamma: { value: 1 }, bright: { value: 1 }, flash: { value: new THREE.Vector4(0, 0, 0, 0) }, levels: { value: 0 }, res: { value: new THREE.Vector2(1, 1) }, goo: { value: 0 }, gooSlide: { value: 0 }, gooTex: { value: null } }, vertexShader: 'varying vec2 vUv; void main(){ vUv=uv; gl_Position=vec4(position.xy,0.0,1.0); }', fragmentShader: BLIT_FRAG, depthTest: false, depthWrite: false });
     this.blitScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.blitMat));
     const post = (frag, extra = {}) => new THREE.ShaderMaterial({ uniforms: { tex: { value: null }, texel: { value: new THREE.Vector2() }, ...extra }, vertexShader: POST_VERT, fragmentShader: frag, depthTest: false, depthWrite: false });
     this.fxaaMat = post(FXAA_FRAG); this.brightMat = post(BRIGHT_FRAG, { threshold: { value: 0.74 } }); this.blurMat = post(BLUR_FRAG, { dir: { value: new THREE.Vector2() } });
@@ -347,7 +363,7 @@ export class Game {
       view: document.getElementById('bview'), menu: document.getElementById('bmenu'), fire: document.getElementById('bfire'), weap: document.getElementById('bweap'),
     };
     this.input = new Input(this.canvas, this.ui);
-    this.shared = { lm: { value: null }, sm: { value: null }, st: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) }, fogColor: { value: new THREE.Color(0, 0, 0) }, fogDensity: { value: 0 }, time: { value: 0 }, camPos: { value: new THREE.Vector3() },
+    this.shared = { ...pbrUniforms(), meteors: { value: 0 }, lm: { value: null }, sm: { value: null }, st: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) }, fogColor: { value: new THREE.Color(0, 0, 0) }, fogDensity: { value: 0 }, time: { value: 0 }, camPos: { value: new THREE.Vector3() },
       lightning: { value: 0 }, wetOn: { value: 0 }, storm: { value: 0 }, bolt: { value: 0 }, boltAz: { value: 0 }, boltSeed: { value: 0 }, city: { value: 0 },
       lightCol: { value: new THREE.Color(0.75, 0.8, 1) }, wetTint: { value: new THREE.Color(1, 1, 1) }, mist: { value: new THREE.Vector4(0, 0, 0, 0) }, mistY: { value: new THREE.Vector2(0, 0) },
       hell: { value: 0 }, skyA: { value: new THREE.Color() }, skyB: { value: new THREE.Color() }, glowCol: { value: new THREE.Color() }, orbDir: { value: new THREE.Vector3(0, 1, 0) }, orbCol: { value: new THREE.Color() }, orbKind: { value: 0 }, silh: { value: 0 }, vortex: { value: 0 }, moonK: { value: 1 }, boltCol: { value: new THREE.Color(0.7, 0.75, 0.95) } };
@@ -417,7 +433,7 @@ export class Game {
 
   async init(onProgress) {
     onProgress(0.05, 'Generating textures');
-    this.T = addBunkerTextures(addRuinTextures(await loadTextures())); this.applyTexQuality();
+    this.T = addUpgradeTextures(addBunkerTextures(addRuinTextures(await loadTextures()))); this.applyTexQuality();
     onProgress(0.15, 'Loading CornPop');
     this.cpAsset = await new CornPopAsset().load('assets/models/cornpop.glb', p => onProgress(0.15 + p * 0.4, 'Loading CornPop')); this.cpAsset.face = true;
     onProgress(0.55, 'Loading Qoq');
@@ -448,6 +464,7 @@ export class Game {
     const s = PLAYER_HEIGHT / 1.94; this.body.root.scale.setScalar(s);
     for (const m of this.body.mats) { m.emissiveMap = m.map; m.emissive = new THREE.Color(0, 0, 0); }
     this.bodyAmb = new THREE.AmbientLight(0xffffff, 0.15); this.bodySun = new THREE.DirectionalLight(0xffffff, 0.55); this.bodySun.position.set(0.3, 1, 0.4); this.bodySun.castShadow = true;
+    try { this.title = new TitleScene(this); this.renderer.compile(this.title.scene, this.title.cam); } catch (e) { console.warn('title scene', e); }
     onProgress(1, 'Ready');
     this.matCache = new Map();
     requestAnimationFrame(t => this.frame(t));
@@ -458,21 +475,24 @@ export class Game {
     tex = this.level?.retex?.[tex] || tex; // a map can re-skin the stock textures (Crypt of Hornt's ruins)
     const key = tex + (o.sky ? 's' : '') + (o.fullbright ? 'f' : '') + (o.nolm ? 'n' : '') + (o.liquid ? 'l' : '');
     if (this.matCache.has(key)) return this.matCache.get(key);
-    const map = this.T[tex] || this.T.brick;
+    const map0 = this.T[tex] || this.T.brick;
     let m;
-    const S = this.shared;
-    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor, hell: S.hell, skyA: S.skyA, skyB: S.skyB, glowCol: S.glowCol, orbDir: S.orbDir, orbCol: S.orbCol, orbKind: S.orbKind, silh: S.silh, vortex: S.vortex, moonK: S.moonK, boltCol: S.boltCol }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
+    const S = this.shared, pbrOk = !o.sky && !o.liquid && !map0.userData.noFilter && !this.gfx().retro && this.opts.pbr !== false;
+    const HD = pbrOk ? hdSet(map0, tex, { scale: this.gfx().hd || 4, aniso: Math.min(this.renderer.capabilities.getMaxAnisotropy(), this.gfx().aniso) }) : null, map = HD ? HD.map : map0, lit = pbrOk && !o.fullbright;
+    if (o.sky) m = new THREE.ShaderMaterial({ uniforms: { map: { value: map }, time: S.time, camPos: S.camPos, tint: { value: new THREE.Color(...(this.level?.skyTint || [0.8, 0.6, 1.0])) }, city: S.city, storm: S.storm, bolt: S.bolt, boltAz: S.boltAz, boltSeed: S.boltSeed, fogColor: S.fogColor, hell: S.hell, skyA: S.skyA, skyB: S.skyB, glowCol: S.glowCol, orbDir: S.orbDir, orbCol: S.orbCol, orbKind: S.orbKind, silh: S.silh, vortex: S.vortex, moonK: S.moonK, boltCol: S.boltCol, meteors: S.meteors }, vertexShader: WORLD_VERT, fragmentShader: SKY_FRAG });
     else m = new THREE.ShaderMaterial({
-      uniforms: { map: { value: map }, lm: this.shared.lm, sm: this.shared.sm, st: this.shared.st, fogColor: this.shared.fogColor, fogDensity: this.shared.fogDensity, time: this.shared.time, fullbright: { value: o.fullbright || o.liquid ? 1 : 0 }, nolm: { value: o.nolm || o.liquid ? 1 : 0 }, scroll: { value: new THREE.Vector2(...(this.scrollTex?.[tex] || (o.liquid ? [0.02, 0.01] : [0, 0]))) }, warp: { value: o.liquid ? 1 : 0 }, alpha: { value: o.liquid ? 0.82 : 1 }, lightning: S.lightning, wetOn: o.liquid ? { value: 0 } : S.wetOn, shine: { value: o.liquid || o.fullbright ? 0 : (map.userData.shine || 0) * (this.level?.gloss ?? 1) }, lightCol: S.lightCol, wetTint: S.wetTint, mist: S.mist, mistY: S.mistY },
+      uniforms: { map: { value: map }, lm: this.shared.lm, sm: this.shared.sm, st: this.shared.st, fogColor: this.shared.fogColor, fogDensity: this.shared.fogDensity, time: this.shared.time, fullbright: { value: o.fullbright || o.liquid ? 1 : 0 }, nolm: { value: o.nolm || o.liquid ? 1 : 0 }, scroll: { value: new THREE.Vector2(...(this.scrollTex?.[tex] || (o.liquid ? [0.02, 0.01] : [0, 0]))) }, warp: { value: o.liquid ? 1 : 0 }, alpha: { value: o.liquid ? 0.82 : 1 }, lightning: S.lightning, wetOn: o.liquid ? { value: 0 } : S.wetOn, shine: { value: o.liquid || o.fullbright ? 0 : (map0.userData.shine || 0) * (this.level?.gloss ?? 1) }, lightCol: S.lightCol, wetTint: S.wetTint, mist: S.mist, mistY: S.mistY,
+        nm: { value: lit ? HD.nm : null }, detailMap: S.detailMap, pbr: { value: new THREE.Vector4(...pbrKind(tex)) }, pbrOn: S.pbrOn, pbrMat: { value: lit ? 1 : 0 }, plPos: S.plPos, plCol: S.plCol, camPos: S.camPos, envUp: S.envUp, envDn: S.envDn, dynPos: S.dynPos, dynCol: S.dynCol },
       vertexShader: WORLD_VERT, fragmentShader: WORLD_FRAG, transparent: !!o.liquid, depthWrite: !o.liquid,
     });
     this.matCache.set(key, m); return m;
   }
   propMat(tex, fullbright) {
     tex = this.level?.retex?.[tex] || tex;
-    const map = this.T[tex] || this.T.brick;
+    const map0 = this.T[tex] || this.T.brick, hdOk = !this.gfx().retro && this.opts.pbr !== false, map = hdOk ? hdSet(map0, tex, { scale: this.gfx().hd || 4, aniso: Math.min(this.renderer.capabilities.getMaxAnisotropy(), this.gfx().aniso) }).map : map0;
     if (fullbright) return new THREE.MeshBasicMaterial({ map, fog: true }); // lamps, neon, lit signs: unlit glow
-    const mat = new THREE.MeshStandardMaterial({ map, roughness: tex.includes('steel') ? 0.25 : 0.7, metalness: tex.includes('steel') ? 0.8 : 0.1, vertexColors: true, envMap: this.envMap });
+    const K = pbrKind(tex);
+    const mat = new THREE.MeshStandardMaterial({ map, roughness: hdOk ? Math.max(0.18, K[0]) : (tex.includes('steel') ? 0.25 : 0.7), metalness: hdOk ? K[1] * 0.85 : (tex.includes('steel') ? 0.8 : 0.1), vertexColors: true, envMap: this.envMap, envMapIntensity: 0.35 });
     if (this.T[tex + 'Normal']) mat.normalMap = this.T[tex + 'Normal'];
     return mat;
   }
@@ -551,6 +571,7 @@ export class Game {
     this.enemies = this.ents.filter(e => ['qoq', 'marv', 'ballinki', 'frenta', 'beans', 'boojo'].includes(e.type)).map(e => new Qoq(this, e));
     this.shootables = this.ents.filter(e => e.type === 'button' && e.shoot);
     this.killsTotal = this.enemies.filter(e => !e.boojo).length; // Boojos are bystanders, not kills
+    for (const e of this.ents) if (e.type === 'rat') this.enemies.push(new Rat(this, e));   // vermin: fought, not counted
     this.playerBrush = W.addDynamic({ min: [0, 0, 0], max: [0, 0, 0], solid: false, shadow: false });
     this.waves = new Map();
     for (const e of this.ents) if (e.type === 'wave') this.waves.set(e.id, { def: e, members: [], state: 'idle' });
@@ -566,7 +587,7 @@ export class Game {
       const m = def.mist; U.mist.value.set(...(m ? m.color : [0, 0, 0]), m ? m.density || 0.0012 : 0); U.mistY.value.set(m && m.top != null ? m.top : 0, m && m.top != null ? m.range || 160 : 0);
       U.hell.value = sk.hell ? 1 : 0; U.skyA.value.setRGB(...(sk.a || [0.05, 0.01, 0.01])); U.skyB.value.setRGB(...(sk.b || [0.7, 0.12, 0.04])); U.glowCol.value.setRGB(...(sk.glow || [0.5, 0.12, 0.03]));
       const o = sk.orb; U.orbKind.value = o ? ({ moon: 1, sun: 2, eye: 3 }[o.kind] || 0) : 0; if (o) { const az = o.az || 0, el = o.el ?? 0.9; U.orbDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); U.orbCol.value.setRGB(...(o.color || [1, 0.15, 0.05])); }
-      U.silh.value = { ruins: 1, volcano: 2, city: 3 }[sk.silh] || 0; U.vortex.value = sk.vortex || 0; U.moonK.value = sk.hell ? (sk.moon ? 1 : 0) : 1;
+      U.silh.value = { ruins: 1, volcano: 2, city: 3 }[sk.silh] || 0; U.vortex.value = sk.vortex || 0; U.moonK.value = sk.hell ? (sk.moon ? 1 : 0) : 1; U.meteors.value = sk.meteors || 0; this.blitMat.uniforms.haze.value = def.haze || 0;
       if (sk.vortex && !o) { const az = sk.vortexAz || 0, el = sk.vortexEl ?? 1.1; U.orbDir.value.set(Math.cos(az) * Math.cos(el), Math.sin(el), Math.sin(az) * Math.cos(el)).normalize(); U.orbCol.value.setRGB(...(sk.vortexColor || [0.5, 1, 0.4])); } }
     this.baseFog = (def.fog || { color: [0, 0, 0] }).color.slice();
     this.storm = def.storm ? { cfg: def.storm, next: 2 + Math.random() * 4, t: 99, pulses: [], power: 0 } : null;
@@ -1576,7 +1597,7 @@ export class Game {
   frame(tms) {
     requestAnimationFrame(t => this.frame(t));
     let dt = Math.min(0.1, this.clock.getDelta());
-    if (!this.world || this.state === 'loading') { this.renderer.setClearColor(0x000000); this.renderer.clear(); return; }
+    if (!this.world || this.state === 'loading') { if (this.title && this.menuUp && !this.ctxLost) this.safe('title', () => this.title.render(dt)); else { this.renderer.setRenderTarget(null); this.renderer.setClearColor(0x000000); this.renderer.clear(); } return; }   // the title screen is a live scene (titlescene.js)
     this.shared.time.value += dt;
     this.perf(dt);
     if (this.ctxLost) return;
@@ -1683,6 +1704,20 @@ export class Game {
     this.tapped = false;
   }
 
+  // ---- PBR: feed the world shader the lamps nearest the camera, the colours a shiny surface reflects, and the current flash ----
+  updatePbrLights(cam, dt) {
+    const S = this.shared, G = this.gfx(); S.pbrOn.value = G.retro || this.opts.pbr === false ? 0 : 1; if (!this.world || !S.pbrOn.value) return;
+    this._pbrN = (this._pbrN || 0) + 1;
+    if (this._pbrN % 3 === 0 || !this._pbrInit) { this._pbrInit = true; const f = this._fwd || (this._fwd = new THREE.Vector3()); cam.getWorldDirection(f); pickLights(S, this.world.lights, cam.position, f, S.st.value); }
+    const fc = S.fogColor.value, L = this.level || {}, eu = L.envUp, ed = L.envDn;
+    if (eu) S.envUp.value.set(eu[0], eu[1], eu[2]); else S.envUp.value.set(0.16 + fc.r * 0.9, 0.16 + fc.g * 0.9, 0.18 + fc.b * 0.9);
+    if (ed) S.envDn.value.set(ed[0], ed[1], ed[2]); else S.envDn.value.set(0.03 + fc.r * 0.3, 0.03 + fc.g * 0.3, 0.03 + fc.b * 0.3);
+    const D = this.dynLight;
+    if (D && D.t > 0) { D.t -= dt; const k = Math.max(0, D.t / D.life); S.dynPos.value.set(D.pos[0], D.pos[1], D.pos[2], D.r); S.dynCol.value.set(D.col[0] * k, D.col[1] * k, D.col[2] * k); } else S.dynPos.value.w = 0;
+  }
+  // a short flash of real light (gun fire, explosions): the brightest recent one wins
+  flashLight(pos, col = [1, 0.8, 0.5], r = 420, life = 0.09) { const D = this.dynLight; if (D && D.t > 0 && D.r * (D.t / D.life) > r) return; this.dynLight = { pos: [pos[0], pos[1], pos[2]], col, r, life, t: life }; }
+
   render(dt) {
     const pl = this.player, cam = this.camera, R = this.renderer;
     const eye = pl.eye();
@@ -1707,6 +1742,7 @@ export class Game {
       cam.rotation.set(pl.pitch * (1 - dk), pl.yaw, (pl.roll || 0) + dk * 0.6, 'YXZ');
     }
     this.shared.camPos.value.copy(cam.position);
+    this.updatePbrLights(cam, dt);
     // 3D world at low res
     if (this.particles) { const k = this.rt.height / Math.max(1, R.getDrawingBufferSize(this._dbs || (this._dbs = new THREE.Vector2())).y); this.particles.points.material.size = 2.2 * k; this.dropFx.points.material.size = 5 * k; }
     R.setRenderTarget(this.rt); R.render(this.scene, cam);
@@ -1726,7 +1762,7 @@ export class Game {
       this.blitMat.uniforms.bloomAmt.value = 0.6;
     } else this.blitMat.uniforms.bloomAmt.value = 0;
     R.setRenderTarget(null);
-    { const U = this.blitMat.uniforms; U.ssr.value = (this.shared.wetOn.value || this.level?.gloss) && this.opts.reflect !== false ? 1 : 0;
+    { const U = this.blitMat.uniforms; U.ssr.value = (this.shared.wetOn.value || this.level?.gloss || this.shared.pbrOn.value) && this.opts.reflect !== false ? 1 : 0;
       if (U.ssr.value) { cam.updateMatrixWorld(); U.proj.value.copy(cam.projectionMatrix); U.invProj.value.copy(cam.projectionMatrixInverse); U.invView.value.copy(cam.matrixWorld);
         const vm = cam.matrixWorldInverse; U.upV.value.set(0, 1, 0).transformDirection(vm); U.xV.value.set(1, 0, 0).transformDirection(vm); U.zV.value.set(0, 0, 1).transformDirection(vm);
         const fc = this.shared.fogColor.value, L = this.shared.lightning.value; U.reflSky.value.setRGB(fc.r * 1.6 + 0.012 + L * 0.5, fc.g * 1.6 + 0.012 + L * 0.55, fc.b * 1.6 + 0.02 + L * 0.7);

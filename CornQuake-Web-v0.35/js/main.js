@@ -4,7 +4,7 @@ import { LEVELS, EPISODES } from './levels.js';
 const $ = (id) => document.getElementById(id);
 const screens = ['loading', 'title', 'episodes', 'levels', 'pause', 'options', 'help'];
 let stack = [];
-function show(name) { for (const s of screens) $(s).classList.toggle('on', s === name); document.body.classList.toggle('playing', !name); }
+function show(name) { for (const s of screens) $(s).classList.toggle('on', s === name); document.body.classList.toggle('playing', !name); if (typeof game !== 'undefined') game.menuUp = !!name && name !== 'loading'; }
 function push(name) { stack.push(name); show(name); }
 function back() { stack.pop(); show(stack[stack.length - 1] || null); if (!stack.length && game.state === 'paused') game.pause(false); }
 function setLoad(p, msg) { $('loadbar').style.width = Math.round(p * 100) + '%'; if (msg) $('loadmsg').textContent = msg.toUpperCase(); }
@@ -59,12 +59,12 @@ function buildLevelList() {
 function syncOptions() {
   for (const k of ['sens', 'touchSens', 'fov', 'gamma', 'vol', 'music', 'songVol']) $('o-' + k).value = game.opts[k] ?? 0.7;
   for (const k of ['vol', 'songVol']) $('p-' + k).value = game.opts[k] ?? 0.7;
-  for (const k of ['invert', 'res', 'third', 'touchUI', 'retro', 'reflect', 'gfx', 'dynres', 'autoHop', 'showFps']) $('o-' + k).value = String(game.opts[k] ?? true);
+  for (const k of ['invert', 'res', 'third', 'touchUI', 'retro', 'reflect', 'pbr', 'gfx', 'dynres', 'autoHop', 'showFps']) $('o-' + k).value = String(game.opts[k] ?? true);
 }
 for (const k of ['sens', 'touchSens', 'fov', 'gamma', 'vol', 'music', 'songVol']) $('o-' + k).addEventListener('input', e => { game.opts[k] = parseFloat(e.target.value); game.saveOpts(); });
 // quick music / sound FX sliders on the pause menu (same settings as Options)
 for (const k of ['vol', 'songVol']) $('p-' + k).addEventListener('input', e => { game.opts[k] = parseFloat(e.target.value); game.saveOpts(); if (k === 'vol') game.sfx.play('menu'); });
-for (const k of ['invert', 'third', 'retro', 'reflect', 'dynres', 'autoHop', 'showFps']) $('o-' + k).addEventListener('change', e => { game.opts[k] = e.target.value === 'true'; game.saveOpts(); });
+for (const k of ['invert', 'third', 'retro', 'reflect', 'pbr', 'dynres', 'autoHop', 'showFps']) $('o-' + k).addEventListener('change', e => { game.opts[k] = e.target.value === 'true'; game.saveOpts(); });
 $('o-gfx').addEventListener('change', e => { game.opts.gfx = e.target.value; game.dynScale = 1; game.saveOpts(); });
 $('o-res').addEventListener('change', e => { game.opts.res = parseInt(e.target.value); game.saveOpts(); });
 $('o-touchUI').addEventListener('change', e => { game.opts.touchUI = e.target.value; game.saveOpts(); });

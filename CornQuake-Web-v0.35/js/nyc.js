@@ -1,13 +1,14 @@
 // New York kit for Episode 2 (The Rotten Apple): streets with sidewalks and lane markings, buildings whose
 // rooftops are real walkable floors (so the skyline steps up and down), storefronts, fire escapes, cars,
 // street furniture, fires and park pieces. Built on the level kit (js/kit.js): N = nyc(K, { sky, f }).
+import { autoSubway } from './subway.js';
 export const NYC_STYLES = [ // light style slots shared by the E2 maps: 1 fire, 2 neon buzz, 3 siren red, 4 siren blue
   { color: [1, 0.55, 0.2], pattern: 'flicker' }, { color: [1, 0.3, 0.7], pattern: 'neon' },
   { color: [1, 0.1, 0.05], pattern: 'mamamamaaaaaaaaaaaaa' }, { color: [0.15, 0.3, 1], pattern: 'aaaaaaaaaamamamamaaa' }];
 
 export function nyc(K, o = {}) {
   const { X, Z, C } = K; const SKY = o.sky || 1600; const T = s => K.type(s);
-  const N = { SKY };
+  const N = { SKY, _buildings: [], _avoid: [] };
   const sky = (f, floor, side = 'curb', extra = {}) => ({ f, c: SKY, floor, ceil: 'sky', side, upper: side, sky: true, ...extra });
   N.sky = sky;
   N.ROAD = (f = 0) => sky(f, 'road', 'curb');
@@ -51,6 +52,7 @@ export function nyc(K, o = {}) {
   // ---- buildings: a block whose roof is a floor at height h (so the facade is the wall between street and roof) ----
   // o: {roof, parapet:'nsew'|false, tower:[x,z], bulk:[x,z], ac:n, upper, floor}
   N.building = (c0, r0, c1, r1, h, facade, bo = {}) => {
+    N._buildings.push({ c0, r0, c1, r1, h });
     K.paint(c0, r0, c1, r1, T(sky(h, bo.floor || 'roof', facade, { upper: bo.upper || facade, inner: bo.inner || 'plaster' })));
     const x0 = X(c0), x1 = X(c1 + 1), z0 = Z(r0), z1 = Z(r1 + 1), p = bo.parapet ?? 'nsew', ph = 18, pt = 8;
     K.post(ctx => {
@@ -61,6 +63,18 @@ export function nyc(K, o = {}) {
         if (p.includes('w')) seg('w', z0 + pt, z1 - pt, (u, v) => ctx.brush([x0, h, u], [x0 + pt, h + ph, v], { tex: 'parapet', top: 'parapet' }));
         if (p.includes('e')) seg('e', z0 + pt, z1 - pt, (u, v) => ctx.brush([x1 - pt, h, u], [x1, h + ph, v], { tex: 'parapet', top: 'parapet' }));
       }
+      // (v0.33) what makes a flat wall a New York building: a projecting cornice on brackets along the roof line, a stone water
+      // table at the pavement, a drainpipe down a corner. Only on sides that face open street, and none of it can be walked into.
+      if (bo.cornice !== false) { const Wd = ctx.W, cTex = bo.corniceTex || 'limestone';
+        for (const [sd, dc, dr] of [['n', 0, -1], ['s', 0, 1], ['w', -1, 0], ['e', 1, 0]]) { const horiz = dr !== 0, n = horiz ? c1 - c0 + 1 : r1 - r0 + 1; let run = null;
+          const flush = (i1) => { if (!run) return; const [i0, sf] = run; run = null; if (i1 - i0 < 2) return; const a0 = (horiz ? X(c0) : Z(r0)) + i0 * 32, a1 = (horiz ? X(c0) : Z(r0)) + i1 * 32, pl = sd === 'n' ? z0 : sd === 's' ? z1 : sd === 'w' ? x0 : x1, mid = (a0 + a1) / 2, L = a1 - a0;
+            const put = (off, y, th, hh, tex) => { const q = pl + (horiz ? dr : dc) * off; if (horiz) ctx.props.box(mid, y, q, L, hh, th, tex); else ctx.props.box(q, y, mid, th, hh, L, tex); };
+            if (h - sf <= 760) { put(5, h - 8, 12, 8, cTex); put(3, h - 16, 8, 8, cTex); for (let a = a0 + 16; a < a1; a += 32) { const q = pl + (horiz ? dr : dc) * 4.5; if (horiz) ctx.props.box(a, h - 28, q, 7, 12, 9, cTex); else ctx.props.box(q, h - 28, a, 9, 12, 7, cTex); } }
+            put(1.6, sf, 3.2, 22, 'granite');
+            if (L >= 160) { const pa = a0 + 9, q = pl + (horiz ? dr : dc) * 3.5, top = Math.min(h - 18, sf + 700); if (horiz) ctx.props.cylinder(pa, sf, q, 2.6, top - sf, 'metal', { segs: 6 }); else ctx.props.cylinder(q, sf, pa, 2.6, top - sf, 'metal', { segs: 6 }); } };
+          for (let i = 0; i < n; i++) { const cc = horiz ? c0 + i : (dc < 0 ? c0 - 1 : c1 + 1), rr = horiz ? (dr < 0 ? r0 - 1 : r1 + 1) : r0 + i, e = Wd.cell(cc, rr), own = Wd.cell(horiz ? c0 + i : (dc < 0 ? c0 : c1), horiz ? (dr < 0 ? r0 : r1) : r0 + i);
+            const open = !e.solid && e.sky && e.f < h - 150 && !own.solid && own.f === h && own.roof == null; if (open && run && run[1] !== e.f) flush(i); if (open) { if (!run) run = [i, e.f]; } else flush(i); }
+          flush(n); } }
       // roof clutter so the skyline reads from the street and from other roofs
       let s = (c0 * 31 + r0 * 17 + h) % 97; const rnd = () => (s = (s * 73 + 41) % 997) / 997;
       const w = x1 - x0, d = z1 - z0;
@@ -223,5 +237,9 @@ export function nyc(K, o = {}) {
   });
   // moonlight: a grid of big, dim blue-grey lights high above the streets so nothing is pitch black
   N.moon = (x0, z0, x1, z1, y = 900, step = 640, color = [0.22, 0.24, 0.36], light = 1000) => { for (let x = x0 + step / 2; x < x1; x += step) for (let z = z0 + step / 2; z < z1; z += step) K.light(x, y, z, light, color); };
+  // ---- (v0.33) the subway: note where street furniture and shop fronts are, then let subway.js dig a station under a building ----
+  for (const k of ['shop', 'decalOn', 'billboard', 'fireEscape', 'scaffold']) { const f = N[k]; N[k] = (F, a, ...rest) => { if (F && F.axis) { const b = k === 'scaffold' && typeof rest[0] === 'number' ? rest[0] : a; for (let q = Math.min(a, b); q <= Math.max(a, b); q += 64) N._avoid.push(fp(F, q, 0)); } return f(F, a, ...rest); }; }
+  for (const k of ['lamp', 'hydrant', 'trash', 'can', 'newsbox', 'mailbox', 'bench', 'cone', 'barrier', 'barrelFire', 'car', 'tree', 'streetSign', 'trafficLight', 'steam', 'fire']) { const f = N[k]; if (f) N[k] = (x, z, ...rest) => { N._avoid.push([x, z]); return f(x, z, ...rest); }; }
+  K.finish.push(() => { N.station = K.meta.name === 'E2M1' ? null : autoSubway(K, N, N._buildings, N._avoid); });   // (E2M1 already ends in a subway)
   return N;
 }
